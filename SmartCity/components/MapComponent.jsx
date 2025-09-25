@@ -12,7 +12,7 @@ const BORDEAUX_REGION = {
 // Clé API OpenRouteService (gratuite jusqu'à 2000 req/jour)
 const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjQxNDNmODQ5NGQ2OTRiNWFhNmRjOWU2ZmUxN2M5OTkzIiwiaCI6Im11cm11cjY0In0=';
 
-function App() {
+function MapComponent() {
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
@@ -252,4 +252,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default App;
+export default MapComponent;
