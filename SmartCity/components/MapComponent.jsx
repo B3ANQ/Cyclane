@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useRouter } from 'expo-router';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,8 +20,9 @@ function MapComponent() {
   const [endPoint, setEndPoint] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [routeInfo, setRouteInfo] = useState(null);
   const mapRef = useRef(null);
+  const [routeInfo, setRouteInfo] = useState(null);
+  const router = useRouter();
 
   // Fonction pour récupérer l'itinéraire vélo via OpenRouteService
   const getRoute = async (start, end) => {
@@ -171,6 +173,14 @@ function MapComponent() {
         <TouchableOpacity style={styles.resetButton} onPress={resetRoute}>
           <Text style={styles.resetButtonText}>🔄 Nouveau trajet</Text>
         </TouchableOpacity>
+
+        {/* Bouton pour aller à la page de filtres */}
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => router.push('/filterpage')}
+        >
+          <Text style={styles.filterButtonText}>🔎 Filtres</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -262,6 +272,17 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+  },
+  filterButton: {
+    marginTop: 10,
+    backgroundColor: '#1A8D5B',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  filterButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
 
