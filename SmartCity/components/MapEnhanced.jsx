@@ -14,10 +14,17 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Image,
 } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Path } from 'react-native-svg';
+import proj4 from 'proj4';
+import PompeIcon from './PompeIcon';
+import TotemIcon from './TotemIcon';
+
+proj4.defs("EPSG:2154","+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 
 const { width, height } = Dimensions.get('window');
 
@@ -30,6 +37,43 @@ const BORDEAUX_REGION = {
 
 // Clé API OpenRouteService
 const ORS_API_KEY = process.env.EXPO_PUBLIC_ORS_API_KEY || process.env.ORS_API_KEY;
+
+// Fonction pour créer le marqueur de service selon le mobilier
+const createServiceMarker = (service) => {
+  const hasPump = service.mobilier.includes('POMPE');
+  const hasTotem = service.mobilier.includes('TOTEM_REPARATION');
+  
+  if (hasPump && hasTotem) {
+    return (
+      <View style={styles.serviceMarkerContainer}>
+        <PompeIcon size={16} />
+        <TotemIcon size={16} />
+      </View>
+    );
+  } else if (hasPump) {
+    return (
+      <View style={styles.serviceMarkerContainer}>
+        <PompeIcon size={20} />
+      </View>
+    );
+  } else if (hasTotem) {
+    return (
+      <View style={styles.serviceMarkerContainer}>
+        <TotemIcon size={20} />
+      </View>
+    );
+  }
+  
+  // Fallback
+  return (
+    <View style={styles.serviceMarkerContainer}>
+      <Ionicons name="bicycle" size={20} color="#888" />
+    </View>
+  );
+};
+
+const lambert93 = 'EPSG:2154';
+const wgs84 = 'EPSG:4326';
 
 function MapEnhanced() {
   const [userLocation, setUserLocation] = useState(null);
@@ -56,8 +100,13 @@ function MapEnhanced() {
   const [currentInstruction, setCurrentInstruction] = useState(null);
   const [isNavigating, setIsNavigating] = useState(false);
 
+  // Nouveaux états pour les services vélo
+  const [bikeServices, setBikeServices] = useState([]);
+  const [isLoadingServices, setIsLoadingServices] = useState(false);
+
   useEffect(() => {
     requestLocationPermission();
+    loadBikeServices(); // Charger les services au démarrage
   }, []);
 
   // Demander les permissions et obtenir la localisation
@@ -451,6 +500,62 @@ function MapEnhanced() {
     getRoute(userLocation, coordinate);
   };
 
+  // Fonction pour charger les services vélo
+  const loadBikeServices = async () => {
+    setIsLoadingServices(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
+      console.log('🔍 Chargement des services depuis:', `${apiUrl}/api/services`);
+      
+      const response = await fetch(`${apiUrl}/api/services`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('✅ Services récupérés:', data.count, 'services');
+      
+      if (data.success && data.data) {
+        // Convertir les coordonnées Lambert93 vers WGS84
+        const servicesWithCoords = data.data.map(service => {
+          const coords = lambert93ToWGS84(
+            service.coordonnees.x, 
+            service.coordonnees.y
+          );
+          return {
+            ...service,
+            wgs84Coords: coords
+          };
+        });
+        
+        setBikeServices(servicesWithCoords);
+        console.log('🚲 Services avec coordonnées:', servicesWithCoords.length);
+      } else {
+        console.warn('⚠️ Réponse API invalide:', data);
+      }
+    } catch (error) {
+      console.error('❌ Erreur chargement services:', error);
+    } finally {
+      setIsLoadingServices(false);
+    }
+  };
+
+  // Remplace la fonction lambert93ToWGS84 par cette version de test :
+  const lambert93ToWGS84 = (x, y) => {
+    // Test : utiliser directement les valeurs comme coordonnées WGS84
+    // En inversant potentiellement lat/lon
+    return { 
+      latitude: 44.837789 + ((y - 4188250) * 0.000009), // Approximation pour Bordeaux
+      longitude: -0.57918 + ((x - 1417341) * 0.000009)
+    };
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -468,6 +573,17 @@ function MapEnhanced() {
         followsUserLocation={isNavigating}
         showsCompass={true}
       >
+        {/* Marqueurs des services vélo */}
+        {bikeServices.map(service => (
+          <Marker
+            key={service.id}
+            coordinate={service.wgs84Coords}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            {createServiceMarker(service)}
+          </Marker>
+        ))}
+
         {/* Marqueur de départ */}
         {startPoint && (
           <Marker
@@ -620,6 +736,14 @@ function MapEnhanced() {
           <View style={styles.loading}>
             <ActivityIndicator size="large" color="#1A8D5B" />
             <Text style={styles.loadingText}>Calcul de l'itinéraire...</Text>
+          </View>
+        )}
+
+        {/* Indicateur de chargement des services */}
+        {isLoadingServices && (
+          <View style={styles.servicesLoading}>
+            <ActivityIndicator size="small" color="#1A8D5B" />
+            <Text style={styles.servicesLoadingText}>Chargement des services vélo...</Text>
           </View>
         )}
       </View>
@@ -1122,6 +1246,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
+  },
+  // Nouveaux styles pour les services vélo
+  serviceMarkerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    padding: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  
+  servicesLoading: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  
+  servicesLoadingText: {
+    marginLeft: 8,
+    fontSize: 12,
+    color: '#1A8D5B',
   },
 });
 
