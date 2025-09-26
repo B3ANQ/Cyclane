@@ -24,7 +24,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
 app.get('/', (req, res) => {
   res.send(`
     <h1>Smart City API</h1>
-    <p>Documentation: <a href="http://10.134.200.96:3000/api-docs">http://10.134.200.96:3000/api-docs</a></p>
+    <p>Documentation: <a href="http://10.134.200.135:3000/api-docs">http://10.134.200.135:3000/api-docs</a></p>
   `);
 });
 

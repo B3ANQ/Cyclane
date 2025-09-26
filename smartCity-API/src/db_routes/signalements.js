@@ -63,7 +63,7 @@ router.get('/test-connection', async (req, res) => {
     res.json({
       success: true,
       message: 'Connexion MongoDB réussie',
-      database: '10.134.200.96:27017/velo', // Changé ici
+      database: '10.134.200.135:27017/velo', // Changé ici
       reportCount: count,
       timestamp: new Date().toISOString()
     });
