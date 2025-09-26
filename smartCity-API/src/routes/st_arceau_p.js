@@ -79,11 +79,27 @@ router.get('/', async (req, res) => {
       });
     }
 
+    // If a bbox query parameter is provided (minLon,minLat,maxLon,maxLat),
+    // filter the arceaux to return only those inside the bbox.
+    const bboxParam = req.query && req.query.bbox;
+    let filtered = arceaux;
+    if (bboxParam) {
+      const parts = bboxParam.split(',').map(p => parseFloat(p));
+      if (parts.length === 4 && parts.every(p => !Number.isNaN(p))) {
+        const [minLon, minLat, maxLon, maxLat] = parts;
+        filtered = arceaux.filter(a => {
+          const c = a.coordonnees || {};
+          if (c.longitude == null || c.latitude == null) return false;
+          return c.longitude >= minLon && c.longitude <= maxLon && c.latitude >= minLat && c.latitude <= maxLat;
+        });
+      }
+    }
+
     res.json({
       success: true,
-      count: arceaux.length,
+      count: filtered.length,
       timestamp: new Date().toISOString(),
-      data: arceaux
+      data: filtered
     });
 
     // Log du nombre d'arceaux récupérés
