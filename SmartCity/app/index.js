@@ -1,19 +1,29 @@
-import React from 'react';import { registerRootComponent } from 'expo';
-
-import { View } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet } from 'react-native';
 
 import MapComponent from '../components/MapComponent';
+import SplashScreen from '../components/SplashScreen.jsx';
 
+export default function Home() {
+  const [showSplash, setShowSplash] = useState(true);
 
+  const handleSplashFinish = () => {
+    setShowSplash(false);
+  };
 
-export default function Home() {// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
+  if (showSplash) {
+    return <SplashScreen onFinish={handleSplashFinish} />;
+  }
 
-  return (// It also ensures that whether you load the app in Expo Go or in a native build,
-
-    <View style={{ flex: 1 }}>// the environment is set up appropriately
-
-      <MapComponent />registerRootComponent(App);
-
+  return (
+    <View style={styles.container}>
+      <MapComponent />
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+});
