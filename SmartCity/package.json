@@ -10,6 +10,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@prisma/client": "^6.16.2",
     "expo": "~54.0.10",
     "expo-linear-gradient": "~15.0.7",
     "expo-router": "~6.0.8",
@@ -25,5 +26,8 @@
   "overrides": {
     "react": "19.1.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "prisma": "^6.16.2"
+  }
 }
