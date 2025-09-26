@@ -29,7 +29,7 @@ const BORDEAUX_REGION = {
 };
 
 // Clé API OpenRouteService
-const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjQxNDNmODQ5NGQ2OTRiNWFhNmRjOWU2ZmUxN2M5OTkzIiwiaCI6Im11cm11cjY0In0=';
+const ORS_API_KEY = process.env.EXPO_PUBLIC_ORS_API_KEY || process.env.ORS_API_KEY;
 
 function MapEnhanced() {
   const [userLocation, setUserLocation] = useState(null);
@@ -246,7 +246,6 @@ function MapEnhanced() {
     if (navigationInstructions.length > 0) {
       setIsNavigating(true);
       setCurrentInstruction(navigationInstructions[0]);
-      Alert.alert('🚴‍♂️ Navigation démarrée', 'Suivez les instructions pour arriver à destination');
     }
   };
 
@@ -436,6 +435,22 @@ function MapEnhanced() {
     }
   };
 
+  // Gestion du clic sur la carte - Ajout de la logique de MapComponent
+  const handleMapPress = (event) => {
+    const coordinate = event.nativeEvent.coordinate;
+    
+    // Vérifier que la localisation utilisateur est disponible
+    if (!userLocation) {
+      Alert.alert('Erreur', 'Position utilisateur non disponible');
+      return;
+    }
+    
+    // Définir automatiquement le point de départ et d'arrivée
+    setStartPoint(userLocation);
+    setEndPoint(coordinate);
+    getRoute(userLocation, coordinate);
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -447,6 +462,7 @@ function MapEnhanced() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : BORDEAUX_REGION}
+        onPress={handleMapPress}
         showsUserLocation={locationPermission}
         showsMyLocationButton={false}
         followsUserLocation={isNavigating}
@@ -489,82 +505,116 @@ function MapEnhanced() {
 
       {/* Interface utilisateur */}
       <View style={styles.overlay}>
-        {/* Header avec infos route */}
-        {routeInfo && (
+        {/* Header avec infos route - Affiché seulement si pas en navigation */}
+        {routeInfo && !isNavigating && (
           <View style={styles.header}>
             <View style={styles.routeInfo}>
               <Text style={styles.routeText}>
                 📍 {routeInfo.distance} km • ⏱️ {routeInfo.duration} min
               </Text>
-              {!isNavigating && navigationInstructions.length > 0 && (
+              {navigationInstructions.length > 0 && (
                 <TouchableOpacity style={styles.startNavButton} onPress={startNavigation}>
                   <Text style={styles.startNavButtonText}>🧭 Démarrer la navigation</Text>
-                </TouchableOpacity>
-              )}
-              {isNavigating && (
-                <TouchableOpacity style={styles.stopNavButton} onPress={stopNavigation}>
-                  <Text style={styles.stopNavButtonText}>⏹️ Arrêter la navigation</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
         )}
 
-        {/* Search bar déroulante */}
-        <View style={styles.searchContainer}>
-          <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
-            <Ionicons name="search" size={20} color="#666" />
-            <Text style={styles.searchBarText}>Rechercher une destination</Text>
-            <Ionicons 
-              name={isSearchExpanded ? "chevron-up" : "chevron-down"} 
-              size={20} 
-              color="#666" 
-            />
-          </TouchableOpacity>
-
-          {isSearchExpanded && (
-            <View style={styles.expandedSearch}>
-              <TouchableOpacity
-                style={[styles.searchOption, startPoint && styles.searchOptionActive]}
-                onPress={() => openSearchModal('start')}
-              >
-                <Ionicons name="play-circle" size={18} color={startPoint ? "#1A8D5B" : "#666"} />
-                <Text style={[styles.searchOptionText, startPoint && styles.searchOptionTextActive]}>
-                  {startPoint ? "Départ défini ✓" : "Choisir le départ"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.searchOption, endPoint && styles.searchOptionActive]}
-                onPress={() => openSearchModal('end')}
-              >
-                <Ionicons name="flag" size={18} color={endPoint ? "#1A8D5B" : "#666"} />
-                <Text style={[styles.searchOptionText, endPoint && styles.searchOptionTextActive]}>
-                  {endPoint ? "Arrivée définie ✓" : "Choisir l'arrivée"}
-                </Text>
+        {/* Header compact pendant la navigation */}
+        {isNavigating && routeInfo && (
+          <View style={styles.compactHeader}>
+            <View style={styles.compactRouteInfo}>
+              <Text style={styles.compactRouteText}>
+                📍 {routeInfo.distance} km • ⏱️ {routeInfo.duration} min
+              </Text>
+              <TouchableOpacity style={styles.stopNavButton} onPress={stopNavigation}>
+                <Text style={styles.stopNavButtonText}>⏹️ Arrêter</Text>
               </TouchableOpacity>
             </View>
-          )}
-        </View>
+          </View>
+        )}
 
-        {/* Bulles simples pour domicile et travail */}
-        <View style={styles.simpleBubbles}>
-          <TouchableOpacity 
-            style={[styles.simpleBubble, homeAddress && styles.simpleBubbleActive]} 
-            onPress={homeAddress ? goHome : setAsHome}
-            onLongPress={homeAddress ? setAsHome : undefined}
-          >
-            <Ionicons name="home" size={24} color={homeAddress ? "#1A8D5B" : "#666"} />
-          </TouchableOpacity>
+        {/* Affichage des instructions contextuelles - Masqué pendant la navigation */}
+        {!routeInfo && !isNavigating && (
+          <View style={styles.instructions}>
+            {!locationPermission && (
+              <Text style={styles.instructionText}>
+                📍 Permission de localisation requise
+              </Text>
+            )}
+            {locationPermission && !userLocation && (
+              <Text style={styles.instructionText}>
+                📍 Obtention de votre position...
+              </Text>
+            )}
+            {userLocation && (
+              <Text style={styles.instructionText}>
+                🎯 Touchez la carte pour choisir votre destination ou utilisez la recherche
+              </Text>
+            )}
+          </View>
+        )}
 
-          <TouchableOpacity 
-            style={[styles.simpleBubble, workAddress && styles.simpleBubbleActive]} 
-            onPress={workAddress ? goToWork : setAsWork}
-            onLongPress={workAddress ? setAsWork : undefined}
-          >
-            <Ionicons name="briefcase" size={24} color={workAddress ? "#1A8D5B" : "#666"} />
-          </TouchableOpacity>
-        </View>
+        {/* Search bar déroulante - Masquée pendant la navigation */}
+        {!isNavigating && (
+          <View style={styles.searchContainer}>
+            <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
+              <Ionicons name="search" size={20} color="#666" />
+              <Text style={styles.searchBarText}>Rechercher une destination</Text>
+              <Ionicons 
+                name={isSearchExpanded ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color="#666" 
+              />
+            </TouchableOpacity>
+
+            {isSearchExpanded && (
+              <View style={styles.expandedSearch}>
+                <TouchableOpacity
+                  style={[styles.searchOption, startPoint && styles.searchOptionActive]}
+                  onPress={() => openSearchModal('start')}
+                >
+                  <Ionicons name="play-circle" size={18} color={startPoint ? "#1A8D5B" : "#666"} />
+                  <Text style={[styles.searchOptionText, startPoint && styles.searchOptionTextActive]}>
+                    {startPoint ? "Départ défini ✓" : "Choisir le départ"}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.searchOption, endPoint && styles.searchOptionActive]}
+                  onPress={() => openSearchModal('end')}
+                >
+                  <Ionicons name="flag" size={18} color={endPoint ? "#1A8D5B" : "#666"} />
+                  <Text style={[styles.searchOptionText, endPoint && styles.searchOptionTextActive]}>
+                    {endPoint ? "Arrivée définie ✓" : "Choisir l'arrivée"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Bulles simples pour domicile et travail - Masquées pendant la navigation */}
+        {!isNavigating && (
+          <View style={styles.simpleBubbles}>
+            <TouchableOpacity 
+              style={[styles.simpleBubble, homeAddress && styles.simpleBubbleActive]} 
+              onPress={homeAddress ? goHome : setAsHome}
+              onLongPress={homeAddress ? setAsHome : undefined}
+            >
+              <Ionicons name="home" size={24} color={homeAddress ? "#1A8D5B" : "#666"} />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.simpleBubble, workAddress && styles.simpleBubbleActive]} 
+              onPress={workAddress ? goToWork : setAsWork}
+              onLongPress={workAddress ? setAsWork : undefined}
+            >
+              <Ionicons name="briefcase" size={24} color={workAddress ? "#1A8D5B" : "#666"} />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {isLoading && (
           <View style={styles.loading}>
@@ -590,7 +640,7 @@ function MapEnhanced() {
         <Ionicons name="refresh" size={24} color="#FF5722" />
       </TouchableOpacity>
 
-      {/* Bouton lancer le trajet en bas */}
+      {/* Bouton lancer le trajet - Affiché seulement si itinéraire calculé et pas en navigation */}
       {routeInfo && !isNavigating && (
         <TouchableOpacity style={styles.startJourneyButtonBottom} onPress={startNavigation}>
           <Ionicons name="navigate" size={24} color="white" />
@@ -598,7 +648,7 @@ function MapEnhanced() {
         </TouchableOpacity>
       )}
 
-      {/* Carte de navigation flottante pendant la navigation */}
+      {/* Carte de navigation flottante - Remplace le bouton pendant la navigation */}
       {isNavigating && currentInstruction && (
         <View style={styles.navigationCard}>
           <View style={styles.navigationContent}>
@@ -710,6 +760,29 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
+  // Header compact pendant la navigation
+  compactHeader: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  compactRouteInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  compactRouteText: {
+    fontSize: 14,
+    color: '#1A8D5B',
+    fontWeight: '600',
+    flex: 1,
+  },
   routeInfo: {
     marginTop: 10,
     padding: 12,
@@ -738,15 +811,31 @@ const styles = StyleSheet.create({
   },
   stopNavButton: {
     backgroundColor: '#F44336',
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 10,
+    padding: 8,
+    borderRadius: 8,
+    marginLeft: 10,
   },
   stopNavButtonText: {
     color: 'white',
     textAlign: 'center',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 12,
+  },
+  instructions: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  instructionText: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#666',
   },
   searchContainer: {
     marginBottom: 10,
