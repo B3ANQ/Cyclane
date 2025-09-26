@@ -43,7 +43,6 @@ const SplashScreen = ({ onFinish }) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar hidden />
       <LinearGradient
         colors={['#FBFFF5', '#FEF7C2', '#FDEDFD']}
         style={styles.gradient}
@@ -97,6 +96,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    width: width,
+    height: height,
   },
   gradient: {
     position: 'absolute',
@@ -104,6 +105,8 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: 0,
+    width: width,
+    height: height,
   },
   circle: {
     position: 'absolute',

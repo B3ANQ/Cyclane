@@ -25,5 +25,7 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    margin: 0,
+    padding: 0,
   },
 });
