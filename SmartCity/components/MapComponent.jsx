@@ -1,7 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PermissionsAndroid, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  PermissionsAndroid,
+  Platform,
+  Modal,
+  ScrollView,
+  KeyboardAvoidingView,
+  Dimensions
+} from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { Ionicons } from '@expo/vector-icons';
+
+const { height } = Dimensions.get('window');
 
 const BORDEAUX_REGION = {
   latitude: 44.837789,
@@ -14,16 +31,27 @@ const BORDEAUX_REGION = {
 const ORS_API_KEY = process.env.EXPO_PUBLIC_ORS_API_KEY || process.env.ORS_API_KEY;
 
 function MapComponent() {
+  const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [locationPermission, setLocationPermission] = useState(false);
-  // Nouveaux états pour les instructions
+  // États pour les instructions de navigation
   const [navigationInstructions, setNavigationInstructions] = useState([]);
   const [currentInstruction, setCurrentInstruction] = useState(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  // États pour la recherche d'adresse
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchType, setSearchType] = useState(''); // 'start', 'end', 'home', 'work'
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  // Adresses prédéfinies
+  const [homeAddress, setHomeAddress] = useState(null);
+  const [workAddress, setWorkAddress] = useState(null);
   const mapRef = useRef(null);
 
   // Demander les permissions et obtenir la localisation
@@ -146,7 +174,7 @@ function MapComponent() {
         
         if (mapRef.current) {
           mapRef.current.fitToCoordinates(coordinates, {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            edgePadding: { top: 100, right: 50, bottom: 200, left: 50 },
             animated: true,
           });
         }
@@ -250,26 +278,180 @@ function MapComponent() {
     }
   };
 
-  const handleMapPress = (event) => {
-    const coordinate = event.nativeEvent.coordinate;
-    
-    // Vérifier que la localisation utilisateur est disponible
-    if (!userLocation) {
-      Alert.alert('Erreur', 'Position utilisateur non disponible');
-      return;
-    }
-    
-    // Définir le point d'arrivée et calculer l'itinéraire
-    setEndPoint(coordinate);
-    getRoute(userLocation, coordinate);
-  };
-
   const resetRoute = () => {
+    setStartPoint(null);
     setEndPoint(null);
     setRouteCoordinates([]);
     setRouteInfo(null);
     setNavigationInstructions([]);
     stopNavigation();
+    setIsSearchExpanded(false);
+    
+    // Recentrer la carte sur l'utilisateur
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({
+        ...userLocation,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 1000);
+    }
+  };
+
+  // Fonction de recherche d'adresses
+  const searchAddress = async (query) => {
+    if (!query.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const response = await fetch(
+        `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5&lat=44.837789&lon=-0.57918`
+      );
+      
+      const data = await response.json();
+      
+      // Vérifier que data.features existe et est un tableau
+      if (data && data.features && Array.isArray(data.features)) {
+        const results = data.features.map(feature => ({
+          id: feature.properties.id,
+          label: feature.properties.label,
+          coordinates: {
+            latitude: feature.geometry.coordinates[1],
+            longitude: feature.geometry.coordinates[0],
+          }
+        }));
+        
+        setSearchResults(results);
+      } else {
+        console.warn('Aucun résultat trouvé ou format de réponse invalide');
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Erreur recherche:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Sélectionner une adresse depuis la recherche
+  const selectAddress = (result) => {
+    if (searchType === 'start') {
+      setStartPoint(result.coordinates);
+    } else if (searchType === 'end') {
+      setEndPoint(result.coordinates);
+    } else if (searchType === 'home') {
+      setHomeAddress(result.coordinates);
+      Alert.alert('✅ Domicile enregistré', 'Votre adresse de domicile a été sauvegardée');
+    } else if (searchType === 'work') {
+      setWorkAddress(result.coordinates);
+      Alert.alert('✅ Travail enregistré', 'Votre adresse de travail a été sauvegardée');
+    }
+    
+    setShowSearchModal(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    
+    // Si on a les deux points, calculer l'itinéraire et fermer la search bar
+    if (searchType === 'end' && startPoint) {
+      getRoute(startPoint, result.coordinates);
+      setIsSearchExpanded(false);
+    } else if (searchType === 'start' && endPoint) {
+      getRoute(result.coordinates, endPoint);
+      setIsSearchExpanded(false);
+    }
+  };
+
+  // Ouvrir le modal de recherche
+  const openSearchModal = (type) => {
+    setSearchType(type);
+    setShowSearchModal(true);
+  };
+
+  // Toggle de la barre de recherche
+  const toggleSearchBar = () => {
+    setIsSearchExpanded(!isSearchExpanded);
+    if (!isSearchExpanded) {
+      // Si on ouvre la search bar, reset les résultats
+      setSearchQuery('');
+      setSearchResults([]);
+    }
+  };
+
+  // Définir l'adresse de la maison
+  const setAsHome = () => {
+    if (!homeAddress) {
+      // Si pas de domicile défini, ouvrir la recherche pour le définir
+      setSearchType('home');
+      setShowSearchModal(true);
+    } else {
+      // Si domicile déjà défini, demander confirmation pour le redéfinir
+      Alert.alert(
+        '🏠 Redéfinir le domicile ?',
+        'Voulez-vous changer votre adresse de domicile ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Redéfinir', 
+            onPress: () => {
+              setSearchType('home');
+              setShowSearchModal(true);
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  // Définir l'adresse du travail
+  const setAsWork = () => {
+    if (!workAddress) {
+      // Si pas de travail défini, ouvrir la recherche pour le définir
+      setSearchType('work');
+      setShowSearchModal(true);
+    } else {
+      // Si travail déjà défini, demander confirmation pour le redéfinir
+      Alert.alert(
+        '💼 Redéfinir le travail ?',
+        'Voulez-vous changer votre adresse de travail ?',
+        [
+          { text: 'Annuler', style: 'cancel' },
+          { 
+            text: 'Redéfinir', 
+            onPress: () => {
+              setSearchType('work');
+              setShowSearchModal(true);
+            }
+          }
+        ]
+      );
+    }
+  };
+
+  // Aller à la maison
+  const goHome = () => {
+    if (!homeAddress) {
+      Alert.alert('❌', 'Aucune adresse de domicile enregistrée');
+      return;
+    }
+    
+    const start = userLocation || BORDEAUX_REGION;
+    setStartPoint(start);
+    setEndPoint(homeAddress);
+    getRoute(start, homeAddress);
+    setIsSearchExpanded(false);
+  };
+
+  // Aller au travail
+  const goToWork = () => {
+    if (!workAddress) {
+      Alert.alert('❌', 'Aucune adresse de travail enregistrée');
+      return;
+    }
+    
+    const start = userLocation || BORDEAUX_REGION;
+    setStartPoint(start);
+    setEndPoint(workAddress);
+    getRoute(start, workAddress);
+    setIsSearchExpanded(false);
   };
 
   return (
@@ -283,19 +465,33 @@ function MapComponent() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : BORDEAUX_REGION}
-        onPress={handleMapPress}
         showsUserLocation={locationPermission}
         showsMyLocationButton={locationPermission}
         followsUserLocation={isNavigating}
         showsCompass={true}
       >
+        {/* Marqueur de départ */}
+        {startPoint && (
+          <Marker
+            coordinate={startPoint}
+            title="Départ"
+          >
+            <View style={styles.startMarker}>
+              <Ionicons name="play" size={16} color="white" />
+            </View>
+          </Marker>
+        )}
+        
         {/* Marqueur d'arrivée */}
         {endPoint && (
           <Marker
             coordinate={endPoint}
             title="Arrivée"
-            pinColor="red"
-          />
+          >
+            <View style={styles.endMarker}>
+              <Ionicons name="flag" size={16} color="white" />
+            </View>
+          </Marker>
         )}
         
         {/* Tracé de l'itinéraire */}
@@ -311,8 +507,9 @@ function MapComponent() {
 
       {/* Interface utilisateur */}
       <View style={styles.overlay}>
-        <View style={styles.header}>
-          {routeInfo && (
+        {/* Header avec infos route */}
+        {routeInfo && (
+          <View style={styles.header}>
             <View style={styles.routeInfo}>
               <Text style={styles.routeText}>
                 📍 {routeInfo.distance} km • ⏱️ {routeInfo.duration} min
@@ -328,7 +525,69 @@ function MapComponent() {
                 </TouchableOpacity>
               )}
             </View>
+          </View>
+        )}
+
+        {/* Search bar déroulante */}
+        <View style={styles.searchContainer}>
+          <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
+            <Ionicons name="search" size={20} color="#666" />
+            <Text style={styles.searchBarText}>Planifier un itinéraire</Text>
+            <Ionicons 
+              name={isSearchExpanded ? "chevron-up" : "chevron-down"} 
+              size={20} 
+              color="#666" 
+            />
+          </TouchableOpacity>
+
+          {isSearchExpanded && (
+            <View style={styles.expandedSearch}>
+              <TouchableOpacity
+                style={[styles.searchOption, startPoint && styles.searchOptionActive]}
+                onPress={() => openSearchModal('start')}
+              >
+                <Ionicons name="play-circle" size={18} color={startPoint ? "#2196F3" : "#666"} />
+                <Text style={[styles.searchOptionText, startPoint && styles.searchOptionTextActive]}>
+                  {startPoint ? "Départ défini ✓" : "Choisir le départ"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.searchOption, endPoint && styles.searchOptionActive]}
+                onPress={() => openSearchModal('end')}
+              >
+                <Ionicons name="flag" size={18} color={endPoint ? "#2196F3" : "#666"} />
+                <Text style={[styles.searchOptionText, endPoint && styles.searchOptionTextActive]}>
+                  {endPoint ? "Arrivée définie ✓" : "Choisir l'arrivée"}
+                </Text>
+              </TouchableOpacity>
+            </View>
           )}
+        </View>
+
+        {/* Bulles domicile et travail */}
+        <View style={styles.quickAddressContainer}>
+          <TouchableOpacity 
+            style={[styles.quickAddressBubble, homeAddress && styles.quickAddressBubbleActive]} 
+            onPress={homeAddress ? goHome : setAsHome}
+            onLongPress={homeAddress ? setAsHome : undefined}
+          >
+            <Ionicons name="home" size={24} color={homeAddress ? "#2196F3" : "#666"} />
+            <Text style={[styles.quickAddressText, homeAddress && styles.quickAddressTextActive]}>
+              {homeAddress ? "Domicile" : "Définir\ndomicile"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.quickAddressBubble, workAddress && styles.quickAddressBubbleActive]} 
+            onPress={workAddress ? goToWork : setAsWork}
+            onLongPress={workAddress ? setAsWork : undefined}
+          >
+            <Ionicons name="briefcase" size={24} color={workAddress ? "#2196F3" : "#666"} />
+            <Text style={[styles.quickAddressText, workAddress && styles.quickAddressTextActive]}>
+              {workAddress ? "Travail" : "Définir\ntravail"}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.instructions}>
@@ -342,14 +601,14 @@ function MapComponent() {
               📍 Obtention de votre position...
             </Text>
           )}
-          {userLocation && !endPoint && (
+          {userLocation && !startPoint && !endPoint && (
             <Text style={styles.instructionText}>
-              🎯 Touchez la carte pour choisir votre destination
+              🎯 Planifiez votre itinéraire en choisissant un départ et une arrivée ou utilisez les raccourcis domicile/travail
             </Text>
           )}
-          {userLocation && endPoint && (
+          {startPoint && endPoint && routeInfo && (
             <Text style={styles.instructionText}>
-              ✅ Itinéraire calculé depuis votre position ! Touchez pour changer de destination
+              ✅ Itinéraire calculé ! Vous pouvez démarrer la navigation.
             </Text>
           )}
         </View>
@@ -381,12 +640,85 @@ function MapComponent() {
             <Text style={styles.distanceText}>
               {getDistanceToCurrentInstruction()}
             </Text>
-            <Text style={styles.instructionText}>
+            <Text style={styles.navigationInstructionText}>
               {currentInstruction.instruction}
             </Text>
           </View>
         </View>
       )}
+
+      {/* Modal de recherche d'adresse */}
+      <Modal
+        visible={showSearchModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowSearchModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {searchType === 'start' ? '📍 Choisir le départ' : 
+                 searchType === 'end' ? '🎯 Choisir l\'arrivée' :
+                 searchType === 'home' ? '🏠 Définir le domicile' :
+                 searchType === 'work' ? '💼 Définir le travail' : 'Rechercher'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowSearchModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Rechercher une adresse..."
+              value={searchQuery}
+              onChangeText={(text) => {
+                setSearchQuery(text);
+                searchAddress(text);
+              }}
+              autoFocus
+            />
+
+            {/* Bouton pour utiliser ma position actuelle (seulement pour le départ) */}
+            {userLocation && searchType === 'start' && (
+              <TouchableOpacity
+                style={styles.currentLocationButton}
+                onPress={() => {
+                  setStartPoint(userLocation);
+                  setShowSearchModal(false);
+                  if (endPoint) {
+                    getRoute(userLocation, endPoint);
+                    setIsSearchExpanded(false);
+                  }
+                }}
+              >
+                <Ionicons name="locate" size={20} color="#2196F3" />
+                <Text style={styles.currentLocationText}>Utiliser ma position actuelle</Text>
+              </TouchableOpacity>
+            )}
+
+            <ScrollView style={styles.searchResultsContainer}>
+              {isSearching ? (
+                <ActivityIndicator size="small" color="#2196F3" style={{ marginTop: 20 }} />
+              ) : (
+                searchResults.map((result) => (
+                  <TouchableOpacity
+                    key={result.id}
+                    style={styles.searchResultItem}
+                    onPress={() => selectAddress(result)}
+                  >
+                    <Ionicons name="location" size={20} color="#2196F3" />
+                    <Text style={styles.searchResultText}>{result.label}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -418,7 +750,6 @@ const styles = StyleSheet.create({
     backdropFilter: 'blur(10px)',
   },
   routeInfo: {
-    marginTop: 10,
     padding: 10,
     backgroundColor: '#E3F2FD',
     borderRadius: 5,
@@ -451,6 +782,99 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontWeight: '600',
   },
+  
+  // Styles de la search bar déroulante
+  searchContainer: {
+    marginBottom: 10,
+  },
+  searchBarToggle: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 15,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchBarText: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  expandedSearch: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 12,
+    marginTop: 5,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  searchOptionActive: {
+    backgroundColor: 'rgba(33, 150, 243, 0.05)',
+  },
+  searchOptionText: {
+    marginLeft: 10,
+    fontSize: 15,
+    color: '#666',
+  },
+  searchOptionTextActive: {
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  
+  // Styles des bulles domicile/travail
+  quickAddressContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
+    gap: 20,
+  },
+  quickAddressBubble: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 15,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    minWidth: 80,
+    minHeight: 80,
+  },
+  quickAddressBubbleActive: {
+    backgroundColor: 'rgba(33, 150, 243, 0.1)',
+    borderColor: '#2196F3',
+  },
+  quickAddressText: {
+    marginTop: 5,
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+  },
+  quickAddressTextActive: {
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  
   instructions: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 12,
@@ -535,12 +959,108 @@ const styles = StyleSheet.create({
     color: '#1976D2',
     minWidth: 80,
   },
-  instructionText: {
-    fontSize: 16,
+  navigationInstructionText: {
+    fontSize: 14,
     color: '#333',
     flex: 1,
-    marginLeft: 16,
-    fontWeight: '500',
+    marginLeft: 10,
+  },
+  
+  // Styles des marqueurs
+  startMarker: {
+    backgroundColor: '#2196F3',
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  endMarker: {
+    backgroundColor: '#FF5722',
+    borderRadius: 20,
+    padding: 8,
+    borderWidth: 3,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  
+  // Styles du modal de recherche
+  modalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: height * 0.8,
+    minHeight: height * 0.4,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2196F3',
+  },
+  searchInput: {
+    margin: 20,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 12,
+    fontSize: 16,
+    backgroundColor: '#F5F5F5',
+  },
+  currentLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    marginHorizontal: 20,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 12,
+    marginBottom: 10,
+  },
+  currentLocationText: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  searchResultsContainer: {
+    maxHeight: height * 0.5,
+    paddingHorizontal: 20,
+  },
+  searchResultItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+    marginBottom: 8,
+    backgroundColor: '#F9F9F9',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+  },
+  searchResultText: {
+    marginLeft: 10,
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
   },
 });
 
