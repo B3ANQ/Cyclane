@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+
+const { width, height } = Dimensions.get('window');
 
 const BORDEAUX_REGION = {
   latitude: 44.837789,
@@ -177,18 +179,23 @@ function MapComponent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: width,
+    height: height,
   },
   map: {
     flex: 1,
+    width: width,
+    height: height,
   },
   overlay: {
     position: 'absolute',
-    top: 50,
+    top: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 50,
     left: 20,
     right: 20,
+    zIndex: 1000,
   },
   header: {
-    backgroundColor: 'white',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 15,
     borderRadius: 10,
     marginBottom: 10,
@@ -197,6 +204,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
+    backdropFilter: 'blur(10px)',
   },
   title: {
     fontSize: 20,
@@ -217,10 +225,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   instructions: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 12,
     borderRadius: 8,
     marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   instructionText: {
     fontSize: 14,
