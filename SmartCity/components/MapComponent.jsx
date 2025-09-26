@@ -1,8 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Dimensions, StatusBar } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, PermissionsAndroid, Platform } from 'react-native';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-
-const { width, height } = Dimensions.get('window');
+import * as Location from 'expo-location';
 
 const BORDEAUX_REGION = {
   latitude: 44.837789,
@@ -11,18 +10,67 @@ const BORDEAUX_REGION = {
   longitudeDelta: 0.05,
 };
 
-// Clé API OpenRouteService (gratuite jusqu'à 2000 req/jour)
 const ORS_API_KEY = 'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjQxNDNmODQ5NGQ2OTRiNWFhNmRjOWU2ZmUxN2M5OTkzIiwiaCI6Im11cm11cjY0In0=';
 
 function MapComponent() {
-  const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [routeInfo, setRouteInfo] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationPermission, setLocationPermission] = useState(false);
   const mapRef = useRef(null);
 
-  // Fonction pour récupérer l'itinéraire vélo via OpenRouteService
+  // Demander les permissions et obtenir la localisation
+  useEffect(() => {
+    requestLocationPermission();
+  }, []);
+
+  const requestLocationPermission = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        setLocationPermission(true);
+        getCurrentLocation();
+      } else {
+        Alert.alert(
+          'Permission refusée',
+          'L\'application a besoin de votre localisation pour fonctionner correctement.'
+        );
+      }
+    } catch (error) {
+      console.error('Erreur permission localisation:', error);
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      const userCoords = {
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      };
+      
+      setUserLocation(userCoords);
+      
+      // Centrer la carte sur la position de l'utilisateur
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          ...userCoords,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Erreur obtention localisation:', error);
+      Alert.alert('Erreur', 'Impossible d\'obtenir votre localisation');
+    }
+  };
+
   const getRoute = async (start, end) => {
     setIsLoading(true);
     try {
@@ -50,7 +98,6 @@ function MapComponent() {
         setRouteCoordinates(coordinates);
         setRouteInfo({ distance, duration });
         
-        // Ajuster la vue pour montrer tout l'itinéraire
         if (mapRef.current) {
           mapRef.current.fitToCoordinates(coordinates, {
             edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
@@ -66,25 +113,21 @@ function MapComponent() {
     }
   };
 
-  // Gestion du tap sur la carte
   const handleMapPress = (event) => {
     const coordinate = event.nativeEvent.coordinate;
     
-    if (!startPoint) {
-      setStartPoint(coordinate);
-    } else if (!endPoint) {
-      setEndPoint(coordinate);
-      // Calculer l'itinéraire automatiquement
-      getRoute(startPoint, coordinate);
-    } else {
-      // Reset pour un nouvel itinéraire
-      resetRoute();
-      setStartPoint(coordinate);
+    // Vérifier que la localisation utilisateur est disponible
+    if (!userLocation) {
+      Alert.alert('Erreur', 'Position utilisateur non disponible');
+      return;
     }
+    
+    // Définir le point d'arrivée et calculer l'itinéraire
+    setEndPoint(coordinate);
+    getRoute(userLocation, coordinate);
   };
 
   const resetRoute = () => {
-    setStartPoint(null);
     setEndPoint(null);
     setRouteCoordinates([]);
     setRouteInfo(null);
@@ -96,20 +139,17 @@ function MapComponent() {
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
-        initialRegion={BORDEAUX_REGION}
+        initialRegion={userLocation ? {
+          ...userLocation,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        } : BORDEAUX_REGION}
         onPress={handleMapPress}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
+        showsUserLocation={locationPermission}
+        showsMyLocationButton={locationPermission}
+        followsUserLocation={false}
+        showsCompass={true}
       >
-        {/* Marqueur de départ */}
-        {startPoint && (
-          <Marker
-            coordinate={startPoint}
-            title="Départ"
-            pinColor="green"
-          />
-        )}
-        
         {/* Marqueur d'arrivée */}
         {endPoint && (
           <Marker
@@ -133,7 +173,6 @@ function MapComponent() {
       {/* Interface utilisateur */}
       <View style={styles.overlay}>
         <View style={styles.header}>
-          <Text style={styles.title}>🚴 Vélo Bordeaux</Text>
           {routeInfo && (
             <View style={styles.routeInfo}>
               <Text style={styles.routeText}>
@@ -144,19 +183,24 @@ function MapComponent() {
         </View>
 
         <View style={styles.instructions}>
-          {!startPoint && (
+          {!locationPermission && (
             <Text style={styles.instructionText}>
-              📍 Touchez la carte pour choisir votre point de départ
+              📍 Permission de localisation requise
             </Text>
           )}
-          {startPoint && !endPoint && (
+          {locationPermission && !userLocation && (
+            <Text style={styles.instructionText}>
+              📍 Obtention de votre position...
+            </Text>
+          )}
+          {userLocation && !endPoint && (
             <Text style={styles.instructionText}>
               🎯 Touchez la carte pour choisir votre destination
             </Text>
           )}
-          {startPoint && endPoint && (
+          {userLocation && endPoint && (
             <Text style={styles.instructionText}>
-              ✅ Itinéraire calculé ! Touchez pour recommencer
+              ✅ Itinéraire calculé depuis votre position ! Touchez pour changer de destination
             </Text>
           )}
         </View>
@@ -168,9 +212,17 @@ function MapComponent() {
           </View>
         )}
 
-        <TouchableOpacity style={styles.resetButton} onPress={resetRoute}>
-          <Text style={styles.resetButtonText}>🔄 Nouveau trajet</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity style={styles.resetButton} onPress={resetRoute}>
+            <Text style={styles.resetButtonText}>🔄 Nouveau trajet</Text>
+          </TouchableOpacity>
+          
+          {locationPermission && (
+            <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
+              <Text style={styles.locationButtonText}>📍 Ma position</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -179,17 +231,13 @@ function MapComponent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    width: width,
-    height: height,
   },
   map: {
     flex: 1,
-    width: width,
-    height: height,
   },
   overlay: {
     position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 50,
+    top: 50,
     left: 20,
     right: 20,
     zIndex: 1000,
@@ -205,12 +253,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
     backdropFilter: 'blur(10px)',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#2196F3',
   },
   routeInfo: {
     marginTop: 10,
@@ -252,13 +294,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
   },
+  buttonContainer: {
+    flexDirection: 'row',
+    gap: 10,
+  },
   resetButton: {
     backgroundColor: '#FF5722',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
+    flex: 1,
   },
   resetButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  locationButton: {
+    backgroundColor: '#4CAF50',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  locationButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
