@@ -2,7 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
-
+const swaggerUi = require('swagger-ui-express');
+const swaggerDocument = require('./config/swagger.json');
 
 const app = express();
 
@@ -12,9 +13,19 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Documentation Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  explorer: true,
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'SmartCity API Documentation'
+}));
+
 // Route basique
 app.get('/', (req, res) => {
-  res.json({ message: 'Smart City API' });
+  res.send(`
+    <h1>Smart City API</h1>
+    <p>Documentation: <a href="http://10.134.200.96:3000/api-docs">http://10.134.200.96:3000/api-docs</a></p>
+  `);
 });
 
 // Import des routes

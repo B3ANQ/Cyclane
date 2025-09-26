@@ -1,0 +1,135 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "SmartCity API",
+    "version": "1.0.0",
+    "description": "API de récupération des données Vélo pour la métropole de Bordeaux"
+  },
+ 
+  "tags": [
+    {
+      "name": "VCub",
+      "description": "Station Le Vélo en temps réel"
+    },
+    {
+      "name": "Pistes cyclables",
+      "description": "Aménagements cyclables de la métropole"
+    },
+    {
+      "name": "Trafic",
+      "description": "Capteurs de trafic vélo"
+    },
+    {
+      "name": "Stationnement",
+      "description": "Stationnements vélo"
+    },
+    {
+      "name": "Free-floating",
+      "description": "Zones de stationnement libre"
+    }
+  ],
+  "paths": {
+    "/api/vcub": {
+      "get": {
+        "tags": ["VCub"],
+        "summary": "Récupère les stations VCub en temps réel",
+        "description": "Retourne la liste de toutes les stations VCub avec leur état actuel",
+        "responses": {
+          "200": {
+            "description": "Liste des stations VCub",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {"type": "boolean"},
+                    "count": {"type": "integer"},
+                    "data": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/VCubStation"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pistes": {
+      "get": {
+        "tags": ["Pistes cyclables"],
+        "summary": "Récupère les pistes cyclables",
+        "responses": {
+          "200": {"description": "Liste des pistes cyclables"}
+        }
+      }
+    },
+    "/api/trafic": {
+      "get": {
+        "tags": ["Trafic"],
+        "summary": "Récupère les données de trafic vélo",
+        "responses": {
+          "200": {"description": "Données de trafic vélo"}
+        }
+      }
+    },
+    "/api/arceaux": {
+      "get": {
+        "tags": ["Stationnement"],
+        "summary": "Récupère les arceaux vélo",
+        "responses": {
+          "200": {"description": "Liste des arceaux vélo"}
+        }
+      }
+    },
+    "/api/freefloating": {
+      "get": {
+        "tags": ["Free-floating"],
+        "summary": "Récupère les zones de stationnement libre",
+        "responses": {
+          "200": {"description": "Zones de stationnement libre"}
+        }
+      }
+    },
+    "/api/services": {
+      "get": {
+        "tags": ["Stationnement"],
+        "summary": "Récupère les services vélo",
+        "responses": {
+          "200": {"description": "Services vélo disponibles"}
+        }
+      }
+    },
+    "/api/stationnement": {
+      "get": {
+        "tags": ["Stationnement"],
+        "summary": "Récupère les stations de stationnement vélo",
+        "responses": {
+          "200": {"description": "Stations de stationnement vélo"}
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "VCubStation": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "integer"},
+          "nom": {"type": "string"},
+          "etat": {"type": "string"},
+          "nbplaces": {"type": "integer"},
+          "nbvelos": {"type": "integer"},
+          "coordonnees": {
+            "type": "object",
+            "properties": {
+              "longitude": {"type": "number"},
+              "latitude": {"type": "number"}
+            }
+          }
+        }
+      }
+    }
+  }
+}

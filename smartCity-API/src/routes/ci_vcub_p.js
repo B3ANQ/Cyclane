@@ -56,7 +56,7 @@ router.get('/', async (req, res) => {
       stations = features.map(feature => {
         const station = feature['bm:CI_VCUB_P'] || {};
         
-        console.log('Station keys:', Object.keys(station)); // Pour debug
+        //console.log('Station keys:', Object.keys(station)); // Pour debug
         
         // Extraction des coordonnées depuis la géométrie
         let coordonnees = { longitude: null, latitude: null };
