@@ -36,6 +36,7 @@ const st_arceau_p = require('./routes/st_arceau_p');
 const st_freefloating_s = require('./routes/st_freefloating_s');
 const st_service_velo_p = require('./routes/st_service_velo_p');
 const st_station_velo_p = require('./routes/st_station_velo_p');
+const signalements = require('./db_routes/signalements');
 
 // Configuration des routes
 app.use('/api/vcub', ci_vcub_p);
@@ -45,5 +46,6 @@ app.use('/api/arceaux', st_arceau_p);
 app.use('/api/freefloating', st_freefloating_s);
 app.use('/api/services', st_service_velo_p);
 app.use('/api/stationnement', st_station_velo_p);
+app.use('/api/signalements', signalements);
 
 module.exports = app;

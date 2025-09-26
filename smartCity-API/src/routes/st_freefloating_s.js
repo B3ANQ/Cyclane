@@ -1,3 +1,6 @@
+// Stationnement freefloating
+// /api/freefloating
+
 const express = require('express');
 const { getAllFreefloatingZones } = require('../controllers/freefloating.controller');
 
