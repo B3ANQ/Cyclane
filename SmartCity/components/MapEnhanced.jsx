@@ -23,6 +23,7 @@ import Svg, { Path } from 'react-native-svg';
 import proj4 from 'proj4';
 import PompeIcon from './PompeIcon';
 import TotemIcon from './TotemIcon';
+import ArceauIcon from './ArceauIcon';
 
 proj4.defs("EPSG:2154","+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 
@@ -103,10 +104,13 @@ function MapEnhanced() {
   // Nouveaux états pour les services vélo
   const [bikeServices, setBikeServices] = useState([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
+  const [arceaux, setArceaux] = useState([]);
+  const [isLoadingArceaux, setIsLoadingArceaux] = useState(false);
 
   useEffect(() => {
     requestLocationPermission();
-    loadBikeServices(); // Charger les services au démarrage
+    loadBikeServices();
+    loadArceaux(); // Ajoute cette ligne
   }, []);
 
   // Demander les permissions et obtenir la localisation
@@ -219,20 +223,51 @@ function MapEnhanced() {
   };
 
   // Fonction pour calculer la distance entre deux points (en mètres)
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371e3; // Rayon de la Terre en mètres
+  function distanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180;
     const φ2 = lat2 * Math.PI / 180;
     const Δφ = (lat2 - lat1) * Math.PI / 180;
     const Δλ = (lon2 - lon1) * Math.PI / 180;
-
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
               Math.cos(φ1) * Math.cos(φ2) *
               Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
     return R * c;
-  };
+  }
+
+  // Fonction de clustering des arceaux
+  function clusterArceaux(arceaux, rayon = 10) {
+    const clusters = [];
+    for (const arceau of arceaux) {
+      let found = false;
+      for (const cluster of clusters) {
+        const d = distanceMeters(
+          arceau.wgs84Coords.latitude, arceau.wgs84Coords.longitude,
+          cluster.latitude, cluster.longitude
+        );
+        if (d < rayon) {
+          // Ajoute au cluster existant
+          cluster.ids.push(arceau.id);
+          cluster.count += arceau.nombre || 1;
+          // Moyenne pondérée pour la position
+          cluster.latitude = (cluster.latitude * (cluster.count - (arceau.nombre || 1)) + arceau.wgs84Coords.latitude * (arceau.nombre || 1)) / cluster.count;
+          cluster.longitude = (cluster.longitude * (cluster.count - (arceau.nombre || 1)) + arceau.wgs84Coords.longitude * (arceau.nombre || 1)) / cluster.count;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        clusters.push({
+          ids: [arceau.id],
+          count: arceau.nombre || 1,
+          latitude: arceau.wgs84Coords.latitude,
+          longitude: arceau.wgs84Coords.longitude,
+        });
+      }
+    }
+    return clusters;
+  }
 
   // Calculer l'itinéraire avec instructions de navigation
   const getRoute = async (start, end) => {
@@ -556,6 +591,35 @@ function MapEnhanced() {
     };
   };
 
+  // Fonction pour charger les arceaux vélo
+  const loadArceaux = async () => {
+    setIsLoadingArceaux(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
+      const response = await fetch(`${apiUrl}/api/arceaux`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        const arceauxWithCoords = data.data.map(item => {
+          const coords = lambert93ToWGS84(
+            item.coordonnees.x,
+            item.coordonnees.y
+          );
+          return {
+            ...item,
+            wgs84Coords: coords
+          };
+        });
+        // Cluster les arceaux
+        const clustered = clusterArceaux(arceauxWithCoords, 20); // 10 mètres
+        setArceaux(clustered);
+      }
+    } catch (error) {
+      console.error('Erreur chargement arceaux:', error);
+    } finally {
+      setIsLoadingArceaux(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -581,6 +645,24 @@ function MapEnhanced() {
             anchor={{ x: 0.5, y: 0.5 }}
           >
             {createServiceMarker(service)}
+          </Marker>
+        ))}
+
+        {/* Marqueurs des arceaux */}
+        {arceaux.map((arceau, idx) => (
+          <Marker
+            key={arceau.ids ? arceau.ids.join('-') : idx}
+            coordinate={{ latitude: arceau.latitude, longitude: arceau.longitude }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.serviceMarkerContainer}>
+              <ArceauIcon size={12} />
+              {arceau.count > 1 && (
+                <Text style={{ marginLeft: 2, color: '#888', fontWeight: 'bold', fontSize: 12 }}>
+                  ×{arceau.count}
+                </Text>
+              )}
+            </View>
           </Marker>
         ))}
 
@@ -744,6 +826,14 @@ function MapEnhanced() {
           <View style={styles.servicesLoading}>
             <ActivityIndicator size="small" color="#1A8D5B" />
             <Text style={styles.servicesLoadingText}>Chargement des services vélo...</Text>
+          </View>
+        )}
+
+        {/* Indicateur de chargement des arceaux */}
+        {isLoadingArceaux && (
+          <View style={styles.servicesLoading}>
+            <ActivityIndicator size="small" color="#1A8D5B" />
+            <Text style={styles.servicesLoadingText}>Chargement des arceaux vélo...</Text>
           </View>
         )}
       </View>
