@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 
-import MapComponent from '../components/MapComponent';
+import MapEnhanced from '../components/MapEnhanced.jsx';
 import SplashScreen from '../components/splashScreen.jsx';
 
 export default function Home() {
@@ -17,7 +17,7 @@ export default function Home() {
 
   return (
     <View style={styles.container}>
-      <MapComponent />
+      <MapEnhanced />
     </View>
   );
 }
