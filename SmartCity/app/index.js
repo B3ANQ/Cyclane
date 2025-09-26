@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 
 import MapComponent from '../components/MapComponent';
-import SplashScreen from '../components/SplashScreen.jsx';
+import SplashScreen from '../components/splashScreen.jsx';
 
 export default function Home() {
   const [showSplash, setShowSplash] = useState(true);
