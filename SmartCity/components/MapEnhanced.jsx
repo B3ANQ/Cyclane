@@ -121,6 +121,34 @@ function MapEnhanced() {
     veloStations: false,
   });
 
+  // Nouvel état pour le signalement d'incidents
+  const [showSignalModal, setShowSignalModal] = useState(false);
+
+  // Types de signalement
+  const SIGNAL_TYPES = {
+    BLOCKED_ROAD: {
+      id: 'blocked_road',
+      title: '🚧 Route bloquée',
+      icon: 'warning',
+      color: '#FF5722',
+      backgroundColor: '#FFEBEE'
+    },
+    DEGRADED_PATH: {
+      id: 'degraded_path',
+      title: '⚠️ Piste dégradée',
+      icon: 'alert-circle',
+      color: '#FF9800',
+      backgroundColor: '#FFF3E0'
+    },
+    BIKE_OBSTRUCTION: {
+      id: 'bike_obstruction',
+      title: '🚲 Voie cyclable obstruée',
+      icon: 'bicycle',
+      color: '#F44336',
+      backgroundColor: '#FFEBEE'
+    }
+  };
+
   useEffect(() => {
     requestLocationPermission();
     loadBikeServices();
@@ -1160,6 +1188,53 @@ function MapEnhanced() {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de signalement */}
+      <Modal
+        visible={showSignalModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSignalModal(false)}
+      >
+        <View style={styles.signalModalOverlay}>
+          <View style={styles.signalModalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.signalModalHeader}>
+              <Text style={styles.signalModalTitle}>🚨 Faire un signalement</Text>
+              <TouchableOpacity onPress={() => setShowSignalModal(false)}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.signalTypesContainer}>
+              {Object.values(SIGNAL_TYPES).map((signalType) => (
+                <TouchableOpacity
+                  key={signalType.id}
+                  style={[styles.signalTypeButton, { backgroundColor: signalType.backgroundColor }]}
+                  onPress={() => setShowSignalModal(false)}
+                >
+                  <View style={styles.signalTypeContent}>
+                    <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}>
+                      <Ionicons name={signalType.icon} size={24} color="white" />
+                    </View>
+                    <Text style={styles.signalTypeText}>{signalType.title}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <Text style={styles.signalInstructions}>
+              Sélectionnez le type de signalement, puis appuyez sur la carte à l'endroit souhaité.
+            </Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Bulle de signalement */}
+      <TouchableOpacity
+        style={[styles.signalBubble, { bottom: 100 }]} // Décale le bouton au-dessus du reset
+        onPress={() => setShowSignalModal(true)}
+      >
+        <Ionicons name="warning" size={24} color="#FF5722" />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -1501,11 +1576,12 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: 'white',
+    backgroundColor: '#FAFDF3',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: height * 0.8,
     minHeight: height * 0.4,
+    maxHeight: height * 0.7,
+    paddingBottom: 34,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1516,7 +1592,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E0E0E0',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1A8D5B',
   },
@@ -1606,6 +1682,99 @@ const styles = StyleSheet.create({
     elevation: 3,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  signalTypeButton: {
+    borderRadius: 15,
+    marginBottom: 15,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  signalBubble: {
+    position: 'absolute',
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    padding: 15,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#FF5722',
+    width: 60,
+    height: 60,
+    zIndex: 1000,
+  },
+  signalModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  signalModalContent: {
+    backgroundColor: '#FAFDF3',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    minHeight: height * 0.4,
+    maxHeight: height * 0.7,
+    paddingBottom: 34,
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#CCC',
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginVertical: 8,
+  },
+  signalModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E0E0E0',
+  },
+  signalModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A8D5B',
+  },
+  signalTypesContainer: {
+    padding: 20,
+  },
+  signalTypeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 20,
+  },
+  signalTypeIcon: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 15,
+  },
+  signalTypeText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  signalInstructions: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#666',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    fontStyle: 'italic',
   },
 });
 
