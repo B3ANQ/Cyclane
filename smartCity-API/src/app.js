@@ -37,6 +37,7 @@ const st_freefloating_s = require('./routes/st_freefloating_s');
 const st_service_velo_p = require('./routes/st_service_velo_p');
 const st_stationnement_velo_p = require('./routes/st_stationnement_velo_p');
 const signalements = require('./db_routes/signalements');
+const reportRoutes = require('./routes/report');
 
 // Configuration des routes
 app.use('/api/vcub', ci_vcub_p);
@@ -47,5 +48,6 @@ app.use('/api/freefloating', st_freefloating_s);
 app.use('/api/services', st_service_velo_p);
 app.use('/api/stationnement', st_stationnement_velo_p);
 app.use('/api/signalements', signalements);
+app.use('/api/report', reportRoutes);
 
 module.exports = app;
