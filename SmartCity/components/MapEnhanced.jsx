@@ -123,6 +123,8 @@ function MapEnhanced() {
 
   // Nouvel état pour le signalement d'incidents
   const [showSignalModal, setShowSignalModal] = useState(false);
+  const [selectedSignalType, setSelectedSignalType] = useState(null);
+  const [isPlacingSignal, setIsPlacingSignal] = useState(false);
 
   // Types de signalement
   const SIGNAL_TYPES = {
@@ -708,6 +710,40 @@ function MapEnhanced() {
     }
   };
 
+  const sendSignalement = async (type, latitude, longitude) => {
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://192.168.1.172:3000';
+      const typeApi = {
+        blocked_road: 'route_barrée',
+        degraded_path: 'piste_dégradée',
+        bike_obstruction: 'voie_cyclable_obstruée',
+      }[type.id] || type.id;
+
+      const body = {
+        type: typeApi,
+        latitude,
+        longitude,
+      };
+
+      const response = await fetch(`${apiUrl}/api/signalements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        Alert.alert('✅ Signalement envoyé', 'Merci pour votre contribution !');
+      } else {
+        Alert.alert('Erreur', data.message || 'Impossible d\'envoyer le signalement');
+      }
+    } catch (error) {
+      Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
+      console.error(error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -719,7 +755,12 @@ function MapEnhanced() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : BORDEAUX_REGION}
-        //onPress={handleMapPress}
+        onPress={isPlacingSignal ? (event) => {
+          const { latitude, longitude } = event.nativeEvent.coordinate;
+          sendSignalement(selectedSignalType, latitude, longitude);
+          setIsPlacingSignal(false);
+          setSelectedSignalType(null);
+        } : handleMapPress}
         showsUserLocation={locationPermission}
         showsMyLocationButton={false}
         followsUserLocation={isNavigating}
@@ -1204,7 +1245,15 @@ function MapEnhanced() {
                 <TouchableOpacity
                   key={signalType.id}
                   style={[styles.signalTypeButton, { backgroundColor: signalType.backgroundColor }]}
-                  onPress={() => setShowSignalModal(false)}
+                  onPress={() => {
+                    setSelectedSignalType(signalType);
+                    setIsPlacingSignal(true);
+                    setShowSignalModal(false);
+                    Alert.alert(
+                      'Placer le signalement',
+                      'Appuyez sur la carte à l\'endroit où vous souhaitez signaler ce problème.'
+                    );
+                  }}
                 >
                   <View style={styles.signalTypeContent}>
                     <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}>
