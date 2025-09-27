@@ -1251,7 +1251,7 @@ function MapEnhanced() {
                     setShowSignalModal(false);
                     Alert.alert(
                       'Placer le signalement',
-                      'Appuyez sur la carte à l\'endroit où vous souhaitez signaler ce problème.'
+                      'Appuyez sur la carte à l\'endroit où vous souhaitez signaler ce problème ou utilisez le bouton en bas à droite pour le placer à votre position actuelle.'
                     );
                   }}
                 >
@@ -1265,7 +1265,8 @@ function MapEnhanced() {
               ))}
             </ScrollView>
             <Text style={styles.signalInstructions}>
-              Sélectionnez le type de signalement, puis appuyez sur la carte à l'endroit souhaité.
+              Sélectionnez le type de signalement, puis appuyez sur la carte à l'endroit souhaité
+              {"\n"}ou utilisez le bouton "Placer à ma position actuelle".
             </Text>
           </View>
         </View>
@@ -1278,6 +1279,20 @@ function MapEnhanced() {
       >
         <Ionicons name="warning" size={24} color="#FF5722" />
       </TouchableOpacity>
+
+      {/* Bulle pour placer le signalement à ma position */}
+      {userLocation && selectedSignalType && isPlacingSignal && (
+        <TouchableOpacity
+          style={styles.placeAtMyPositionBubble}
+          onPress={() => {
+            sendSignalement(selectedSignalType, userLocation.latitude, userLocation.longitude);
+            setIsPlacingSignal(false);
+            setSelectedSignalType(null);
+          }}
+        >
+          <Ionicons name="locate" size={22} color="white" />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -1817,6 +1832,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 10,
     fontStyle: 'italic',
+  },
+  placeAtMyPositionBubble: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    backgroundColor: '#FF5722',
+    padding: 15,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    width: 60,
+    height: 60,
+    zIndex: 1000,
   },
 });
 
