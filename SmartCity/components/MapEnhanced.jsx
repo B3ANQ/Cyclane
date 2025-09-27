@@ -24,8 +24,9 @@ import proj4 from 'proj4';
 import PompeIcon from './PompeIcon';
 import TotemIcon from './TotemIcon';
 import ArceauIcon from './ArceauIcon';
+import FreeFloatingIcon from './FreeFloatingIcon';
 
-proj4.defs("EPSG:2154","+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
+proj4.defs("EPSG:2154", "+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 
 const { width, height } = Dimensions.get('window');
 
@@ -43,7 +44,7 @@ const ORS_API_KEY = process.env.EXPO_PUBLIC_ORS_API_KEY || process.env.ORS_API_K
 const createServiceMarker = (service) => {
   const hasPump = service.mobilier.includes('POMPE');
   const hasTotem = service.mobilier.includes('TOTEM_REPARATION');
-  
+
   if (hasPump && hasTotem) {
     return (
       <View style={styles.serviceMarkerContainer}>
@@ -64,7 +65,7 @@ const createServiceMarker = (service) => {
       </View>
     );
   }
-  
+
   // Fallback
   return (
     <View style={styles.serviceMarkerContainer}>
@@ -106,18 +107,21 @@ function MapEnhanced() {
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [arceaux, setArceaux] = useState([]);
   const [isLoadingArceaux, setIsLoadingArceaux] = useState(false);
+  const [freeFloatingZones, setFreeFloatingZones] = useState([]);
+  const [isLoadingFreeFloating, setIsLoadingFreeFloating] = useState(false);
 
   useEffect(() => {
     requestLocationPermission();
     loadBikeServices();
-    loadArceaux(); // Ajoute cette ligne
+    loadArceaux();
+    loadFreeFloatingZones();
   }, []);
 
   // Demander les permissions et obtenir la localisation
   const requestLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      
+
       if (status === 'granted') {
         setLocationPermission(true);
         getUserLocation();
@@ -138,14 +142,14 @@ function MapEnhanced() {
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-      
+
       const userCoords = {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
       };
-      
+
       setUserLocation(userCoords);
-      
+
       // Centrer la carte sur l'utilisateur
       if (mapRef.current) {
         mapRef.current.animateToRegion({
@@ -163,15 +167,15 @@ function MapEnhanced() {
   // Fonction de recherche d'adresses
   const searchAddress = async (query) => {
     if (!query.trim()) return;
-    
+
     setIsSearching(true);
     try {
       const response = await fetch(
         `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query)}&limit=5&lat=44.837789&lon=-0.57918`
       );
-      
+
       const data = await response.json();
-      
+
       if (data && data.features && Array.isArray(data.features)) {
         const results = data.features.map(feature => ({
           id: feature.properties.id,
@@ -181,7 +185,7 @@ function MapEnhanced() {
             longitude: feature.geometry.coordinates[0],
           }
         }));
-        
+
         setSearchResults(results);
       } else {
         console.warn('Aucun résultat trouvé ou format de réponse invalide');
@@ -207,11 +211,11 @@ function MapEnhanced() {
       setWorkAddress(result.coordinates);
       Alert.alert('✅ Travail enregistré', 'Votre adresse de travail a été sauvegardée');
     }
-    
+
     setShowSearchModal(false);
     setSearchQuery('');
     setSearchResults([]);
-    
+
     // Si on a les deux points, calculer l'itinéraire et fermer la search bar
     if (searchType === 'end' && startPoint) {
       getRoute(startPoint, result.coordinates);
@@ -230,8 +234,8 @@ function MapEnhanced() {
     const Δφ = (lat2 - lat1) * Math.PI / 180;
     const Δλ = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      Math.cos(φ1) * Math.cos(φ2) *
+      Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
@@ -277,23 +281,23 @@ function MapEnhanced() {
         `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
         `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`
       );
-      
+
       if (!response.ok) {
         throw new Error('Erreur API OpenRouteService');
       }
-      
+
       const data = await response.json();
-      
+
       if (data.features && data.features.length > 0) {
         const coordinates = data.features[0].geometry.coordinates.map(coord => ({
           latitude: coord[1],
           longitude: coord[0],
         }));
-        
+
         const properties = data.features[0].properties.segments[0];
         const distance = (properties.distance / 1000).toFixed(1);
         const duration = Math.round(properties.duration / 60);
-        
+
         // Extraire les instructions de navigation
         const instructions = properties.steps.map((step, index) => ({
           id: index,
@@ -305,11 +309,11 @@ function MapEnhanced() {
             longitude: coordinates[step.way_points[0]]?.longitude || start.longitude,
           }
         }));
-        
+
         setRouteCoordinates(coordinates);
         setRouteInfo({ distance, duration });
         setNavigationInstructions(instructions);
-        
+
         if (mapRef.current) {
           mapRef.current.fitToCoordinates(coordinates, {
             edgePadding: { top: 100, right: 50, bottom: 200, left: 50 },
@@ -361,7 +365,7 @@ function MapEnhanced() {
           }
         );
       };
-      
+
       watchPosition();
     }
 
@@ -376,7 +380,7 @@ function MapEnhanced() {
   const updateCurrentInstruction = (userPos) => {
     if (!currentInstruction || navigationInstructions.length === 0) return;
 
-    const distanceToInstruction = calculateDistance(
+    const distanceToInstruction = distanceMeters(
       userPos.latitude,
       userPos.longitude,
       currentInstruction.coordinate.latitude,
@@ -400,7 +404,7 @@ function MapEnhanced() {
   const getDistanceToCurrentInstruction = () => {
     if (!currentInstruction || !userLocation) return null;
 
-    const distance = calculateDistance(
+    const distance = distanceMeters(
       userLocation.latitude,
       userLocation.longitude,
       currentInstruction.coordinate.latitude,
@@ -427,8 +431,8 @@ function MapEnhanced() {
         'Voulez-vous changer votre adresse de domicile ?',
         [
           { text: 'Annuler', style: 'cancel' },
-          { 
-            text: 'Redéfinir', 
+          {
+            text: 'Redéfinir',
             onPress: () => {
               setSearchType('home');
               setShowSearchModal(true);
@@ -450,8 +454,8 @@ function MapEnhanced() {
         'Voulez-vous changer votre adresse de travail ?',
         [
           { text: 'Annuler', style: 'cancel' },
-          { 
-            text: 'Redéfinir', 
+          {
+            text: 'Redéfinir',
             onPress: () => {
               setSearchType('work');
               setShowSearchModal(true);
@@ -468,7 +472,7 @@ function MapEnhanced() {
       Alert.alert('❌', 'Aucune adresse de maison enregistrée');
       return;
     }
-    
+
     const start = userLocation || BORDEAUX_REGION;
     setStartPoint(start);
     setEndPoint(homeAddress);
@@ -481,7 +485,7 @@ function MapEnhanced() {
       Alert.alert('❌', 'Aucune adresse de travail enregistrée');
       return;
     }
-    
+
     const start = userLocation || BORDEAUX_REGION;
     setStartPoint(start);
     setEndPoint(workAddress);
@@ -495,7 +499,7 @@ function MapEnhanced() {
     setRouteInfo(null);
     setNavigationInstructions([]);
     stopNavigation();
-    
+
     // Recentrer la carte sur l'utilisateur
     if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion({
@@ -522,13 +526,13 @@ function MapEnhanced() {
   // Gestion du clic sur la carte - Ajout de la logique de MapComponent
   const handleMapPress = (event) => {
     const coordinate = event.nativeEvent.coordinate;
-    
+
     // Vérifier que la localisation utilisateur est disponible
     if (!userLocation) {
       Alert.alert('Erreur', 'Position utilisateur non disponible');
       return;
     }
-    
+
     // Définir automatiquement le point de départ et d'arrivée
     setStartPoint(userLocation);
     setEndPoint(coordinate);
@@ -541,26 +545,26 @@ function MapEnhanced() {
     try {
       const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
       console.log('🔍 Chargement des services depuis:', `${apiUrl}/api/services`);
-      
+
       const response = await fetch(`${apiUrl}/api/services`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         }
       });
-      
+
       if (!response.ok) {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
-      
+
       const data = await response.json();
       console.log('✅ Services récupérés:', data.count, 'services');
-      
+
       if (data.success && data.data) {
         // Convertir les coordonnées Lambert93 vers WGS84
         const servicesWithCoords = data.data.map(service => {
           const coords = lambert93ToWGS84(
-            service.coordonnees.x, 
+            service.coordonnees.x,
             service.coordonnees.y
           );
           return {
@@ -568,7 +572,7 @@ function MapEnhanced() {
             wgs84Coords: coords
           };
         });
-        
+
         setBikeServices(servicesWithCoords);
         console.log('🚲 Services avec coordonnées:', servicesWithCoords.length);
       } else {
@@ -585,7 +589,7 @@ function MapEnhanced() {
   const lambert93ToWGS84 = (x, y) => {
     // Test : utiliser directement les valeurs comme coordonnées WGS84
     // En inversant potentiellement lat/lon
-    return { 
+    return {
       latitude: 44.837789 + ((y - 4188250) * 0.000009), // Approximation pour Bordeaux
       longitude: -0.57918 + ((x - 1417341) * 0.000009)
     };
@@ -610,13 +614,30 @@ function MapEnhanced() {
           };
         });
         // Cluster les arceaux
-        const clustered = clusterArceaux(arceauxWithCoords, 20); // 10 mètres
+        const clustered = clusterArceaux(arceauxWithCoords, 50); // 50 mètres
         setArceaux(clustered);
       }
     } catch (error) {
       console.error('Erreur chargement arceaux:', error);
     } finally {
       setIsLoadingArceaux(false);
+    }
+  };
+
+  // Fonction pour charger les zones de free-floating
+  const loadFreeFloatingZones = async () => {
+    setIsLoadingFreeFloating(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
+      const response = await fetch(`${apiUrl}/api/freefloating`);
+      const data = await response.json();
+      if (data.success && data.zones) {
+        setFreeFloatingZones(data.zones);
+      }
+    } catch (error) {
+      console.error('Erreur chargement freefloating:', error);
+    } finally {
+      setIsLoadingFreeFloating(false);
     }
   };
 
@@ -648,23 +669,11 @@ function MapEnhanced() {
           </Marker>
         ))}
 
-        {/* Marqueurs des arceaux */}
-        {arceaux.map((arceau, idx) => (
-          <Marker
-            key={arceau.ids ? arceau.ids.join('-') : idx}
-            coordinate={{ latitude: arceau.latitude, longitude: arceau.longitude }}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={styles.serviceMarkerContainer}>
-              <ArceauIcon size={12} />
-              {arceau.count > 1 && (
-                <Text style={{ marginLeft: 2, color: '#888', fontWeight: 'bold', fontSize: 12 }}>
-                  ×{arceau.count}
-                </Text>
-              )}
-            </View>
-          </Marker>
-        ))}
+        {/* Marqueurs des arceaux vélo */}
+        
+
+        {/* Marqueurs des zones freefloating */}
+        
 
         {/* Marqueur de départ */}
         {startPoint && (
@@ -677,7 +686,7 @@ function MapEnhanced() {
             </View>
           </Marker>
         )}
-        
+
         {/* Marqueur d'arrivée */}
         {endPoint && (
           <Marker
@@ -689,7 +698,7 @@ function MapEnhanced() {
             </View>
           </Marker>
         )}
-        
+
         {/* Tracé de l'itinéraire */}
         {routeCoordinates.length > 0 && (
           <Polyline
@@ -760,10 +769,10 @@ function MapEnhanced() {
             <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
               <Ionicons name="search" size={20} color="#666" />
               <Text style={styles.searchBarText}>Rechercher une destination</Text>
-              <Ionicons 
-                name={isSearchExpanded ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color="#666" 
+              <Ionicons
+                name={isSearchExpanded ? "chevron-up" : "chevron-down"}
+                size={20}
+                color="#666"
               />
             </TouchableOpacity>
 
@@ -796,16 +805,16 @@ function MapEnhanced() {
         {/* Bulles simples pour domicile et travail - Masquées pendant la navigation */}
         {!isNavigating && (
           <View style={styles.simpleBubbles}>
-            <TouchableOpacity 
-              style={[styles.simpleBubble, homeAddress && styles.simpleBubbleActive]} 
+            <TouchableOpacity
+              style={[styles.simpleBubble, homeAddress && styles.simpleBubbleActive]}
               onPress={homeAddress ? goHome : setAsHome}
               onLongPress={homeAddress ? setAsHome : undefined}
             >
               <Ionicons name="home" size={24} color={homeAddress ? "#1A8D5B" : "#666"} />
             </TouchableOpacity>
 
-            <TouchableOpacity 
-              style={[styles.simpleBubble, workAddress && styles.simpleBubbleActive]} 
+            <TouchableOpacity
+              style={[styles.simpleBubble, workAddress && styles.simpleBubbleActive]}
               onPress={workAddress ? goToWork : setAsWork}
               onLongPress={workAddress ? setAsWork : undefined}
             >
@@ -836,19 +845,26 @@ function MapEnhanced() {
             <Text style={styles.servicesLoadingText}>Chargement des arceaux vélo...</Text>
           </View>
         )}
+
+        {isLoadingFreeFloating && (
+          <View style={styles.servicesLoading}>
+            <ActivityIndicator size="small" color="#1A8D5B" />
+            <Text style={styles.servicesLoadingText}>Chargement freefloating...</Text>
+          </View>
+        )}
       </View>
 
       {/* Bulle Ma position en bas à gauche */}
-      <TouchableOpacity 
-        style={styles.locationBubble} 
+      <TouchableOpacity
+        style={styles.locationBubble}
         onPress={getUserLocation}
       >
         <Ionicons name="locate" size={24} color="#1A8D5B" />
       </TouchableOpacity>
 
       {/* Bulle Reset en bas à droite */}
-      <TouchableOpacity 
-        style={styles.resetBubble} 
+      <TouchableOpacity
+        style={styles.resetBubble}
         onPress={resetRoute}
       >
         <Ionicons name="refresh" size={24} color="#FF5722" />
@@ -890,10 +906,10 @@ function MapEnhanced() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {searchType === 'start' ? '📍 Choisir le départ' : 
-                 searchType === 'end' ? '🎯 Choisir l\'arrivée' :
-                 searchType === 'home' ? '🏠 Définir le domicile' :
-                 searchType === 'work' ? '💼 Définir le travail' : 'Rechercher'}
+                {searchType === 'start' ? '📍 Choisir le départ' :
+                  searchType === 'end' ? '🎯 Choisir l\'arrivée' :
+                    searchType === 'home' ? '🏠 Définir le domicile' :
+                      searchType === 'work' ? '💼 Définir le travail' : 'Rechercher'}
               </Text>
               <TouchableOpacity onPress={() => setShowSearchModal(false)}>
                 <Ionicons name="close" size={24} color="#666" />
@@ -1337,19 +1353,19 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
   },
-  // Nouveaux styles pour les services vélo
+
   serviceMarkerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    padding: 2,
+    padding: 1,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
   },
-  
+
   servicesLoading: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 10,
@@ -1363,7 +1379,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  
+
   servicesLoadingText: {
     marginLeft: 8,
     fontSize: 12,

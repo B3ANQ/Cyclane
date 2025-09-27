@@ -33,6 +33,7 @@
   },
   "private": true,
   "devDependencies": {
-    "prisma": "^6.16.2"
+    "prisma": "^6.16.2",
+    "react-native-svg-transformer": "^1.5.1"
   }
 }
