@@ -113,6 +113,13 @@ function MapEnhanced() {
   const [veloStations, setVeloStations] = useState([]);
   const [isLoadingVeloStations, setIsLoadingVeloStations] = useState(false);
   const [selectedVeloStation, setSelectedVeloStation] = useState(null);
+  const [showFiltersModal, setShowFiltersModal] = useState(false);
+  const [filters, setFilters] = useState({
+    bikeServices: false,
+    arceaux: false,
+    freeFloating: false,
+    veloStations: false,
+  });
 
   useEffect(() => {
     requestLocationPermission();
@@ -691,7 +698,7 @@ function MapEnhanced() {
         showsCompass={true}
       >
         {/* Marqueurs des services vélo */}
-        {bikeServices.map(service => (
+        {filters.bikeServices && bikeServices.map(service => (
           <Marker
             key={service.id}
             coordinate={service.wgs84Coords}
@@ -702,7 +709,7 @@ function MapEnhanced() {
         ))}
 
         {/* Marqueurs des arceaux vélo */}
-        {arceaux.map((arceau, idx) => (
+        {filters.arceaux && arceaux.map((arceau, idx) => (
           <Marker
             key={arceau.ids ? arceau.ids.join('-') : idx}
             coordinate={{ latitude: arceau.latitude, longitude: arceau.longitude }}
@@ -720,7 +727,7 @@ function MapEnhanced() {
         ))}
 
         {/* Marqueurs des zones freefloating */}
-        {freeFloatingZones.map(zone => (
+        {filters.freeFloating && freeFloatingZones.map(zone => (
           <Marker
             key={zone.gid}
             coordinate={{
@@ -734,7 +741,7 @@ function MapEnhanced() {
         ))}
 
         {/* Marqueurs des stations Le Vélo TBM */}
-        {veloStations.map(station => (
+        {filters.veloStations && veloStations.map(station => (
           <Marker
             key={station.id}
             coordinate={station.wgs84Coords}
@@ -837,16 +844,29 @@ function MapEnhanced() {
         {/* Search bar déroulante - Masquée pendant la navigation */}
         {!isNavigating && (
           <View style={styles.searchContainer}>
-            <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
-              <Ionicons name="search" size={20} color="#666" />
-              <Text style={styles.searchBarText}>Rechercher une destination</Text>
-              <Ionicons
-                name={isSearchExpanded ? "chevron-up" : "chevron-down"}
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-
+            <View style={styles.searchRow}>
+              <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
+                <Ionicons name="search" size={20} color="#666" />
+                <Text
+                  style={styles.searchBarText}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  Rechercher une destination
+                </Text>
+                <Ionicons
+                  name={isSearchExpanded ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color="#666"
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.filterButton}
+                onPress={() => setShowFiltersModal(true)}
+              >
+                <Ionicons name="options" size={22} color="#1A8D5B" />
+              </TouchableOpacity>
+            </View>
             {isSearchExpanded && (
               <View style={styles.expandedSearch}>
                 <TouchableOpacity
@@ -890,6 +910,13 @@ function MapEnhanced() {
               onLongPress={workAddress ? setAsWork : undefined}
             >
               <Ionicons name="briefcase" size={24} color={workAddress ? "#1A8D5B" : "#666"} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.simpleBubble}
+              onPress={() => setShowFiltersModal(true)}
+            >
+              <Ionicons name="options" size={24} color="#1A8D5B" />
             </TouchableOpacity>
           </View>
         )}
@@ -1073,6 +1100,66 @@ function MapEnhanced() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Modal de filtres */}
+      <Modal
+        visible={showFiltersModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowFiltersModal(false)}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0,0,0,0.3)',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}>
+          <View style={{
+            backgroundColor: 'white',
+            borderRadius: 18,
+            padding: 28,
+            width: '85%',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.2,
+            shadowRadius: 8,
+            elevation: 8,
+          }}>
+            <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 18, color: '#1A8D5B' }}>
+              Filtres d'affichage
+            </Text>
+            {[
+              { key: 'bikeServices', label: 'Services vélo' },
+              { key: 'arceaux', label: 'Arceaux vélo' },
+              { key: 'freeFloating', label: 'Zones freefloating' },
+              { key: 'veloStations', label: 'Stations Le Vélo TBM' },
+            ].map(f => (
+              <View key={f.key} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ flex: 1, fontSize: 16 }}>{f.label}</Text>
+                <TouchableOpacity
+                  onPress={() => setFilters(prev => ({ ...prev, [f.key]: !prev[f.key] }))}
+                  style={{
+                    width: 44, height: 28, borderRadius: 14, backgroundColor: filters[f.key] ? '#1A8D5B' : '#E0E0E0',
+                    justifyContent: 'center', padding: 3,
+                  }}
+                >
+                  <View style={{
+                    width: 22, height: 22, borderRadius: 11, backgroundColor: 'white',
+                    alignSelf: filters[f.key] ? 'flex-end' : 'flex-start',
+                    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
+                  }} />
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity
+              style={{ marginTop: 10, alignSelf: 'flex-end', padding: 8 }}
+              onPress={() => setShowFiltersModal(false)}
+            >
+              <Text style={{ color: '#1A8D5B', fontWeight: 'bold', fontSize: 16 }}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1183,24 +1270,33 @@ const styles = StyleSheet.create({
   searchContainer: {
     marginBottom: 10,
   },
-  searchBarToggle: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 15,
-    borderRadius: 12,
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
+  searchBarToggle: {
+  flex: 1,
+  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+  paddingVertical: 12,
+  paddingHorizontal: 8, // réduit de 10 à 8
+  borderRadius: 12,
+  flexDirection: 'row',
+  alignItems: 'center',
+  minWidth: 0,
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.1,
+  shadowRadius: 4,
+  elevation: 3,
+},
   searchBarText: {
     flex: 1,
     marginLeft: 10,
     fontSize: 16,
     color: '#666',
+    minWidth: 0,
+    maxWidth: 140, // Ajouté pour éviter le débordement
   },
   expandedSearch: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1497,6 +1593,19 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 12,
     color: '#1A8D5B',
+  },
+  filterButton: {
+    marginLeft: 8,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 8, // réduit de 10 à 8
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
