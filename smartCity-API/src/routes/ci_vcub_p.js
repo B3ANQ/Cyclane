@@ -24,10 +24,13 @@ router.get('/', async (req, res) => {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000 // 15 secondes de timeout
+      timeout: 15000, // 15 secondes de timeout
+      responseType: 'arraybuffer' // Pour contrôler l'encodage
     });
 
-    console.log('Réponse reçue, taille:', response.data.length); // Pour debug
+    // Conversion explicite en UTF-8
+    const xmlData = Buffer.from(response.data).toString('utf8');
+    console.log('Réponse reçue, taille:', xmlData.length); // Pour debug
 
     // Conversion XML vers JSON
     const parser = new xml2js.Parser({
@@ -36,7 +39,7 @@ router.get('/', async (req, res) => {
       mergeAttrs: true
     });
 
-    const result = await parser.parseStringPromise(response.data);
+    const result = await parser.parseStringPromise(xmlData);
     
     // Debug: afficher la structure
     console.log('Structure parsée:', Object.keys(result));

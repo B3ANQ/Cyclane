@@ -25,6 +25,7 @@ import PompeIcon from './PompeIcon';
 import TotemIcon from './TotemIcon';
 import ArceauIcon from './ArceauIcon';
 import FreeFloatingIcon from './FreeFloatingIcon';
+import LeVeloIcon from './LeVeloIcon';
 
 proj4.defs("EPSG:2154", "+proj=lcc +lat_1=49 +lat_2=44 +lat_0=46.5 +lon_0=3 +x_0=700000 +y_0=6600000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 
@@ -109,12 +110,16 @@ function MapEnhanced() {
   const [isLoadingArceaux, setIsLoadingArceaux] = useState(false);
   const [freeFloatingZones, setFreeFloatingZones] = useState([]);
   const [isLoadingFreeFloating, setIsLoadingFreeFloating] = useState(false);
+  const [veloStations, setVeloStations] = useState([]);
+  const [isLoadingVeloStations, setIsLoadingVeloStations] = useState(false);
+  const [selectedVeloStation, setSelectedVeloStation] = useState(null);
 
   useEffect(() => {
     requestLocationPermission();
     loadBikeServices();
     loadArceaux();
     loadFreeFloatingZones();
+    loadVeloStations();
   }, []);
 
   // Demander les permissions et obtenir la localisation
@@ -641,6 +646,33 @@ function MapEnhanced() {
     }
   };
 
+  // Fonction pour charger les stations de vélo
+  const loadVeloStations = async () => {
+    setIsLoadingVeloStations(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
+      const response = await fetch(`${apiUrl}/api/vcub`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        const stationsWithCoords = data.data.map(station => {
+          const coords = lambert93ToWGS84(
+            station.coordonnees.x,
+            station.coordonnees.y
+          );
+          return {
+            ...station,
+            wgs84Coords: coords
+          };
+        });
+        setVeloStations(stationsWithCoords);
+      }
+    } catch (error) {
+      console.error('Erreur chargement stations vélo:', error);
+    } finally {
+      setIsLoadingVeloStations(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <MapView
@@ -652,7 +684,7 @@ function MapEnhanced() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : BORDEAUX_REGION}
-        onPress={handleMapPress}
+        //onPress={handleMapPress}
         showsUserLocation={locationPermission}
         showsMyLocationButton={false}
         followsUserLocation={isNavigating}
@@ -670,10 +702,49 @@ function MapEnhanced() {
         ))}
 
         {/* Marqueurs des arceaux vélo */}
-        
+        {arceaux.map((arceau, idx) => (
+          <Marker
+            key={arceau.ids ? arceau.ids.join('-') : idx}
+            coordinate={{ latitude: arceau.latitude, longitude: arceau.longitude }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <View style={styles.serviceMarkerContainer}>
+              <ArceauIcon size={12} />
+              {arceau.count > 1 && (
+                <Text style={{ marginLeft: 2, color: '#888', fontWeight: 'bold', fontSize: 10 }}>
+                  ×{arceau.count}
+                </Text>
+              )}
+            </View>
+          </Marker>
+        ))}
 
         {/* Marqueurs des zones freefloating */}
-        
+        {freeFloatingZones.map(zone => (
+          <Marker
+            key={zone.gid}
+            coordinate={{
+              latitude: zone.geo_point_2d.lat,
+              longitude: zone.geo_point_2d.lon,
+            }}
+            anchor={{ x: 0.5, y: 0.5 }}
+          >
+            <FreeFloatingIcon size={28} />
+          </Marker>
+        ))}
+
+        {/* Marqueurs des stations Le Vélo TBM */}
+        {veloStations.map(station => (
+          <Marker
+            key={station.id}
+            coordinate={station.wgs84Coords}
+            anchor={{ x: 0.5, y: 0.5 }}
+            onPress={() => setSelectedVeloStation(station)}
+          >
+            <LeVeloIcon size={32} />
+          </Marker>
+        ))}
+
 
         {/* Marqueur de départ */}
         {startPoint && (
@@ -846,12 +917,22 @@ function MapEnhanced() {
           </View>
         )}
 
+        {/* Indicateur de chargement des services freefloating */}
         {isLoadingFreeFloating && (
           <View style={styles.servicesLoading}>
             <ActivityIndicator size="small" color="#1A8D5B" />
             <Text style={styles.servicesLoadingText}>Chargement freefloating...</Text>
           </View>
         )}
+
+        {/* Indicateur de chargement des stations Le Vélo */}
+        {isLoadingVeloStations && (
+          <View style={styles.servicesLoading}>
+            <ActivityIndicator size="small" color="#1A8D5B" />
+            <Text style={styles.servicesLoadingText}>Chargement des stations Le Vélo...</Text>
+          </View>
+        )}
+
       </View>
 
       {/* Bulle Ma position en bas à gauche */}
@@ -960,6 +1041,38 @@ function MapEnhanced() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Détails de la station sélectionnée */}
+      {selectedVeloStation && (
+        <View style={{
+          position: 'absolute',
+          bottom: 180,
+          left: 20,
+          right: 20,
+          backgroundColor: 'white',
+          borderRadius: 14,
+          padding: 18,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.2,
+          shadowRadius: 8,
+          elevation: 8,
+          zIndex: 2000,
+        }}>
+          <Text style={{ fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>
+            Station Le Vélo TBM : {selectedVeloStation.nom}
+          </Text>
+          <Text>Nombre de places : <Text style={{ fontWeight: 'bold' }}>{selectedVeloStation.nbplaces}</Text></Text>
+          <Text>Vélos classiques : <Text style={{ fontWeight: 'bold' }}>{selectedVeloStation.nbclassique}</Text></Text>
+          <Text>Vélos électriques : <Text style={{ fontWeight: 'bold' }}>{selectedVeloStation.nbelec}</Text></Text>
+          <TouchableOpacity
+            style={{ marginTop: 12, alignSelf: 'flex-end', padding: 6 }}
+            onPress={() => setSelectedVeloStation(null)}
+          >
+            <Text style={{ color: '#1A8D5B', fontWeight: 'bold' }}>Fermer</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
