@@ -888,12 +888,6 @@ function MapEnhanced() {
                   color="#666"
                 />
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.filterButton}
-                onPress={() => setShowFiltersModal(true)}
-              >
-                <Ionicons name="options" size={22} color="#1A8D5B" />
-              </TouchableOpacity>
             </View>
             {isSearchExpanded && (
               <View style={styles.expandedSearch}>
@@ -1351,27 +1345,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   searchBarToggle: {
-  flex: 1,
-  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-  paddingVertical: 12,
-  paddingHorizontal: 8, // réduit de 10 à 8
-  borderRadius: 12,
-  flexDirection: 'row',
-  alignItems: 'center',
-  minWidth: 0,
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 1 },
-  shadowOpacity: 0.1,
-  shadowRadius: 4,
-  elevation: 3,
-},
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 12,
+    paddingHorizontal: 8, // réduit de 10 à 8
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
   searchBarText: {
     flex: 1,
     marginLeft: 10,
     fontSize: 16,
     color: '#666',
     minWidth: 0,
-    maxWidth: 140, // Ajouté pour éviter le débordement
   },
   expandedSearch: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
