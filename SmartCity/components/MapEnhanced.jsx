@@ -151,12 +151,17 @@ function MapEnhanced() {
     }
   };
 
+  // Nouveaux états pour les signalements
+  const [signalements, setSignalements] = useState([]);
+  const [isLoadingSignalements, setIsLoadingSignalements] = useState(false);
+
   useEffect(() => {
     requestLocationPermission();
     loadBikeServices();
     loadArceaux();
     loadFreeFloatingZones();
     loadVeloStations();
+    fetchSignalements();
   }, []);
 
   // Demander les permissions et obtenir la localisation
@@ -710,6 +715,23 @@ function MapEnhanced() {
     }
   };
 
+  // Fonction pour charger les signalements
+  const fetchSignalements = async () => {
+    setIsLoadingSignalements(true);
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${apiUrl}/api/signalements`);
+      const data = await response.json();
+      if (data.success && data.data) {
+        setSignalements(data.data);
+      }
+    } catch (error) {
+      console.error('Erreur chargement signalements:', error);
+    } finally {
+      setIsLoadingSignalements(false);
+    }
+  };
+
   const sendSignalement = async (type, latitude, longitude) => {
     try {
       const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://192.168.1.172:3000';
@@ -735,6 +757,7 @@ function MapEnhanced() {
 
       if (response.ok && data.success) {
         Alert.alert('✅ Signalement envoyé', 'Merci pour votre contribution !');
+        fetchSignalements(); // recharge la liste après ajout
       } else {
         Alert.alert('Erreur', data.message || 'Impossible d\'envoyer le signalement');
       }
@@ -855,6 +878,48 @@ function MapEnhanced() {
             lineDashPattern={[1]}
           />
         )}
+
+        {/* Marqueurs des signalements */}
+        {signalements.map((signalement) => {
+          let iconName = 'alert-circle';
+          let iconColor = '#FF9800';
+          if (signalement.type === 'route_barrée') {
+            iconName = 'warning';
+            iconColor = '#FF5722';
+          } else if (signalement.type === 'piste_dégradée') {
+            iconName = 'alert-circle';
+            iconColor = '#FF9800';
+          } else if (signalement.type === 'voie_cyclable_obstruée') {
+            iconName = 'bicycle';
+            iconColor = '#F44336';
+          }
+          return (
+            <Marker
+              key={signalement.id}
+              coordinate={{
+                latitude: signalement.latitude,
+                longitude: signalement.longitude,
+              }}
+              title={signalement.type.replace(/_/g, ' ')}
+              description={new Date(signalement.timestamp).toLocaleString()}
+            >
+              <View style={{
+                backgroundColor: iconColor,
+                borderRadius: 20,
+                padding: 8,
+                borderWidth: 2,
+                borderColor: 'white',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.2,
+                shadowRadius: 4,
+                elevation: 4,
+              }}>
+                <Ionicons name={iconName} size={22} color="white" />
+              </View>
+            </Marker>
+          );
+        })}
       </MapView>
 
       {/* Interface utilisateur */}
@@ -1020,6 +1085,14 @@ function MapEnhanced() {
           <View style={styles.servicesLoading}>
             <ActivityIndicator size="small" color="#1A8D5B" />
             <Text style={styles.servicesLoadingText}>Chargement des stations Le Vélo...</Text>
+          </View>
+        )}
+
+        {/* Indicateur de chargement des signalements */}
+        {isLoadingSignalements && (
+          <View style={styles.servicesLoading}>
+            <ActivityIndicator size="small" color="#FF5722" />
+            <Text style={styles.servicesLoadingText}>Chargement des signalements...</Text>
           </View>
         )}
 
