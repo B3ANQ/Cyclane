@@ -16,7 +16,7 @@ import {
   SafeAreaView,
   Image,
 } from 'react-native';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Polyline, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -77,6 +77,19 @@ const createServiceMarker = (service) => {
 
 const lambert93 = 'EPSG:2154';
 const wgs84 = 'EPSG:4326';
+
+const getAvoidRadius = (type) => {
+  switch (type) {
+    case 'route_barrée':
+      return 20;
+    case 'piste_dégradée':
+      return 20;
+    case 'voie_cyclable_obstruée':
+      return 20;
+    default:
+      return 20;
+  }
+};
 
 function MapEnhanced() {
   const [userLocation, setUserLocation] = useState(null);
@@ -320,14 +333,64 @@ function MapEnhanced() {
     return clusters;
   }
 
-  // Calculer l'itinéraire avec instructions de navigation
+  // Fonction pour créer un polygone circulaire (boucle fermée)
+  const createCircularPolygon = (lat, lng, radiusMeters, points = 12) => {
+    const coords = [];
+    const earthRadius = 6371000; // Rayon de la Terre en mètres
+
+    for (let i = 0; i < points; i++) {
+      const angle = (i * 360 / points) * Math.PI / 180;
+      const deltaLat = radiusMeters * Math.cos(angle) / earthRadius;
+      const deltaLng = radiusMeters * Math.sin(angle) / (earthRadius * Math.cos(lat * Math.PI / 180));
+      const pointLat = lat + deltaLat * 180 / Math.PI;
+      const pointLng = lng + deltaLng * 180 / Math.PI;
+      coords.push([pointLng, pointLat]); // [lon, lat]
+    }
+    // Boucle fermée
+    if (coords.length > 0) {
+      coords.push(coords[0]);
+    }
+    return coords;
+  };
+
+  // Fonction pour créer des polygones d'évitement autour des signalements
+  const createAvoidPolygons = (signalements) => {
+    const polygons = [];
+    signalements
+      .filter(s => s.status === 'actif')
+      .forEach(signalement => {
+        const radius = 20; // 20m
+        const polygon = createCircularPolygon(
+          signalement.latitude,
+          signalement.longitude,
+          radius
+        );
+        polygons.push([polygon]); // Format MultiPolygon
+      });
+    return polygons;
+  };
+
+  // Calculer l'itinéraire avec instructions de navigation et évitement des signalements
   const getRoute = async (start, end) => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
-        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`
-      );
+      const avoidPolygons = createAvoidPolygons(signalements);
+
+      let url = `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
+        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`;
+
+      if (avoidPolygons.length > 0) {
+        const avoidPolygonsGeoJSON = {
+          type: "MultiPolygon",
+          coordinates: avoidPolygons
+        };
+        const optionsParam = encodeURIComponent(JSON.stringify({ avoid_polygons: avoidPolygonsGeoJSON }));
+        url += `&options=${optionsParam}`;
+      }
+
+      // Pour debug : console.log(url);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Erreur API OpenRouteService');
@@ -570,7 +633,7 @@ function MapEnhanced() {
     }
   };
 
-  // Gestion du clic sur la carte - Ajout de la logique de MapComponent
+  // Gestion du clic sur la carte avec prise en compte des signalements
   const handleMapPress = (event) => {
     const coordinate = event.nativeEvent.coordinate;
 
@@ -583,6 +646,8 @@ function MapEnhanced() {
     // Définir automatiquement le point de départ et d'arrivée
     setStartPoint(userLocation);
     setEndPoint(coordinate);
+    
+    // Calculer l'itinéraire en évitant les signalements
     getRoute(userLocation, coordinate);
   };
 
@@ -767,6 +832,15 @@ function MapEnhanced() {
     }
   };
 
+  // Surveiller les changements de signalements pour recalculer l'itinéraire
+  useEffect(() => {
+    // Si un itinéraire est actif et que les signalements changent, recalculer
+    if (startPoint && endPoint && routeCoordinates.length > 0) {
+      console.log('🔄 Recalcul de l\'itinéraire avec nouveaux signalements');
+      getRoute(startPoint, endPoint);
+    }
+  }, [signalements]); // Dépendance sur les signalements
+
   return (
     <View style={styles.container}>
       <MapView
@@ -920,6 +994,24 @@ function MapEnhanced() {
             </Marker>
           );
         })}
+
+        {/* Cercles d'évitement autour des signalements actifs (optionnel pour visualisation) */}
+        {signalements
+          .filter(s => s.status === 'actif')
+          .map((signalement) => (
+            <Circle
+              key={`avoid-${signalement.id}`}
+              center={{
+                latitude: signalement.latitude,
+                longitude: signalement.longitude,
+              }}
+              radius={getAvoidRadius(signalement.type)}
+              strokeColor="rgba(255, 87, 34, 0.5)"
+              fillColor="rgba(255, 87, 34, 0.1)"
+              strokeWidth={2}
+            />
+          ))
+        }
       </MapView>
 
       {/* Interface utilisateur */}
