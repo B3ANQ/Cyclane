@@ -4,7 +4,9 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   TextInput,
+  Keyboard,
   ActivityIndicator,
   Alert,
   Dimensions,
@@ -103,6 +105,16 @@ function MapEnhanced() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  // Inline start/end search states (Option B)
+  const [startQuery, setStartQuery] = useState('');
+  const [endQuery, setEndQuery] = useState('');
+  const [startResults, setStartResults] = useState([]);
+  const [endResults, setEndResults] = useState([]);
+  const [isStartSearching, setIsStartSearching] = useState(false);
+  const [isEndSearching, setIsEndSearching] = useState(false);
+  const startTimerRef = useRef(null);
+  const endTimerRef = useRef(null);
+  const [isStartEditing, setIsStartEditing] = useState(false);
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
   const mapRef = useRef(null);
@@ -115,6 +127,7 @@ function MapEnhanced() {
   const [navigationInstructions, setNavigationInstructions] = useState([]);
   const [currentInstruction, setCurrentInstruction] = useState(null);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [showStepsModal, setShowStepsModal] = useState(false);
 
   // Nouveaux états pour les services vélo
   const [bikeServices, setBikeServices] = useState([]);
@@ -136,8 +149,10 @@ function MapEnhanced() {
 
   // Nouvel état pour le signalement d'incidents
   const [showSignalModal, setShowSignalModal] = useState(false);
-  const [selectedSignalType, setSelectedSignalType] = useState(null);
-  const [isPlacingSignal, setIsPlacingSignal] = useState(false);
+  // Toast notification for transient messages (e.g., signalement envoyé)
+  const [toastMessage, setToastMessage] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const toastTimerRef = useRef(null);
 
   // Types de signalement
   const SIGNAL_TYPES = {
@@ -167,6 +182,18 @@ function MapEnhanced() {
   // Nouveaux états pour les signalements
   const [signalements, setSignalements] = useState([]);
   const [isLoadingSignalements, setIsLoadingSignalements] = useState(false);
+
+  const showTransientMessage = (msg, duration = 1800) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToastMessage(msg);
+    setShowToast(true);
+    toastTimerRef.current = setTimeout(() => {
+      setShowToast(false);
+      toastTimerRef.current = null;
+    }, duration);
+  };
+
+  // fonts removed — using default system fonts for now
 
   useEffect(() => {
     requestLocationPermission();
@@ -210,6 +237,11 @@ function MapEnhanced() {
 
       setUserLocation(userCoords);
 
+      // Par défaut, utiliser la position utilisateur comme départ si aucun départ défini
+      if (!startPoint) {
+        setStartPoint(userCoords);
+        setStartQuery('Ma position');
+      }
       // Centrer la carte sur l'utilisateur
       if (mapRef.current) {
         mapRef.current.animateToRegion({
@@ -374,26 +406,64 @@ function MapEnhanced() {
   const getRoute = async (start, end) => {
     setIsLoading(true);
     try {
-      const avoidPolygons = createAvoidPolygons(signalements);
-
-      let url = `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
-        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`;
-
-      if (avoidPolygons.length > 0) {
-        const avoidPolygonsGeoJSON = {
-          type: "MultiPolygon",
-          coordinates: avoidPolygons
-        };
-        const optionsParam = encodeURIComponent(JSON.stringify({ avoid_polygons: avoidPolygonsGeoJSON }));
-        url += `&options=${optionsParam}`;
+      if (!ORS_API_KEY) {
+        console.error('OpenRouteService API key missing (ORS_API_KEY)');
+        showTransientMessage('Clé ORS manquante — impossible de calculer l\'itinéraire');
+        setIsLoading(false);
+        return;
       }
 
-      // Pour debug : console.log(url);
+      const avoidPolygons = createAvoidPolygons(signalements);
 
-      const response = await fetch(url);
+      // Use POST to avoid excessively long GET URLs when options are large
+      const bodyPayload = {
+        coordinates: [
+          [start.longitude, start.latitude],
+          [end.longitude, end.latitude]
+        ],
+        instructions: true,
+        units: 'm'
+      };
+
+      if (avoidPolygons.length > 0) {
+        bodyPayload.options = { avoid_polygons: { type: 'MultiPolygon', coordinates: avoidPolygons } };
+      }
+
+      const url = 'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson';
+      console.log('ORS POST URL:', url);
+      console.log('ORS POST body size:', JSON.stringify(bodyPayload).length);
+
+      let response;
+      try {
+        response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json; charset=utf-8',
+            'Authorization': ORS_API_KEY,
+          },
+          body: JSON.stringify(bodyPayload),
+        });
+      } catch (netErr) {
+        console.error('Network error when calling ORS:', netErr);
+        showTransientMessage('Erreur réseau: impossible de joindre le service d\'itinéraire');
+        setIsLoading(false);
+        return;
+      }
 
       if (!response.ok) {
-        throw new Error('Erreur API OpenRouteService');
+        // Extract server message without throwing
+        let text = await response.text();
+        try {
+          const parsed = JSON.parse(text);
+          console.error('ORS error:', parsed);
+          showTransientMessage(parsed.error || parsed.message || `Erreur ORS: ${response.status}`);
+        } catch (e) {
+          console.error('ORS error text:', text);
+          showTransientMessage(`Erreur ORS: ${response.status}`);
+        }
+        setIsLoading(false);
+        return;
       }
 
       const data = await response.json();
@@ -409,15 +479,67 @@ function MapEnhanced() {
         const duration = Math.round(properties.duration / 60);
 
         // Extraire les instructions de navigation
+        // Simplify instructions for compact display while riding
+        const simplifyStep = (step, coords) => {
+          const text = (step.instruction || '').toLowerCase();
+          let icon = 'navigate';
+          let short = 'Suivre';
+
+          if (text.includes('droite') || text.includes('turn right') || text.includes('right')) {
+            icon = 'arrow-forward';
+            short = 'Droite';
+          } else if (text.includes('gauche') || text.includes('turn left') || text.includes('left')) {
+            icon = 'arrow-back';
+            short = 'Gauche';
+          } else if (text.includes('rond') || text.includes('roundabout')) {
+            icon = 'sync';
+            // try to extract exit number from the instruction (French/English variants)
+            let exitNum = null;
+            const exitRegex1 = /(?:sortie|exit)\s*(?:n(?:°|o)?\s*)?(\d+)/i; // 'sortie 2' or 'exit 2'
+            const exitRegex2 = /take the\s*(\d+)(?:st|nd|rd|th)?\s*exit/i; // 'take the 2nd exit'
+            const m1 = step.instruction && step.instruction.match(exitRegex1);
+            const m2 = step.instruction && step.instruction.match(exitRegex2);
+            if (m1 && m1[1]) exitNum = m1[1];
+            else if (m2 && m2[1]) exitNum = m2[1];
+            if (exitNum) {
+              // French ordinal formatting
+              const n = parseInt(exitNum, 10);
+              const ordinal = (n === 1) ? '1ère' : `${n}ème`;
+              short = `Rond-point ${ordinal} sortie`;
+            } else {
+              short = 'Rond-point';
+            }
+          } else if (text.includes('arriv') || text.includes('destination') || text.includes('finish')) {
+            icon = 'flag';
+            short = 'Arrivée';
+          } else if (text.includes('continuer') || text.includes('straight') || text.includes('continue')) {
+            icon = 'arrow-up';
+            short = 'Tout droit';
+          } else {
+            icon = 'navigate';
+            short = text.split('.').shift().slice(0, 18) || 'Suivre';
+          }
+
+          const dist = step.distance ? `${Math.round(step.distance)}m` : '';
+          // For glanceable info we avoid street names; for roundabouts we show exit number if available
+          const shortText = dist ? `${short} · ${dist}` : `${short}`;
+
+          return {
+            icon,
+            shortText,
+            full: step.instruction,
+            distance: step.distance,
+            type: step.type,
+            coordinate: {
+              latitude: coords[step.way_points[0]]?.latitude || start.latitude,
+              longitude: coords[step.way_points[0]]?.longitude || start.longitude,
+            }
+          };
+        };
+
         const instructions = properties.steps.map((step, index) => ({
           id: index,
-          instruction: step.instruction,
-          distance: step.distance,
-          type: step.type,
-          coordinate: {
-            latitude: coordinates[step.way_points[0]]?.latitude || start.latitude,
-            longitude: coordinates[step.way_points[0]]?.longitude || start.longitude,
-          }
+          ...simplifyStep(step, coordinates)
         }));
 
         setRouteCoordinates(coordinates);
@@ -507,6 +629,24 @@ function MapEnhanced() {
         stopNavigation();
         Alert.alert('🎉 Félicitations !', 'Vous êtes arrivé à destination !');
       }
+    }
+  };
+
+  // Helpers for navigation UI
+  const getCurrentInstructionIndex = () => {
+    if (!currentInstruction) return -1;
+    return navigationInstructions.findIndex(inst => inst.id === currentInstruction.id);
+  };
+
+  const getNavigationProgress = () => {
+    const idx = getCurrentInstructionIndex();
+    if (idx < 0 || navigationInstructions.length === 0) return 0;
+    return Math.min(1, (idx) / Math.max(1, navigationInstructions.length - 1));
+  };
+
+  const recenterToUser = () => {
+    if (userLocation && mapRef.current) {
+      mapRef.current.animateToRegion({ ...userLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
     }
   };
 
@@ -618,6 +758,16 @@ function MapEnhanced() {
         longitudeDelta: 0.01,
       }, 1000);
     }
+  };
+
+  // Supprimer uniquement l'itinéraire (ne touche pas au point de départ)
+  const clearRoute = () => {
+    setEndPoint(null);
+    setRouteCoordinates([]);
+    setRouteInfo(null);
+    setNavigationInstructions([]);
+    setCurrentInstruction(null);
+    setIsNavigating(false);
   };
 
   const openSearchModal = (type) => {
@@ -821,13 +971,14 @@ function MapEnhanced() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        Alert.alert('✅ Signalement envoyé', 'Merci pour votre contribution !');
+        // Show a small transient notification instead of modal alert
+        showTransientMessage('Signalement envoyé');
         fetchSignalements(); // recharge la liste après ajout
       } else {
-        Alert.alert('Erreur', data.message || 'Impossible d\'envoyer le signalement');
+        showTransientMessage(data.message || 'Erreur envoi signalement');
       }
     } catch (error) {
-      Alert.alert('Erreur', 'Impossible d\'envoyer le signalement');
+      showTransientMessage('Erreur: impossible d\'envoyer le signalement');
       console.error(error);
     }
   };
@@ -841,6 +992,10 @@ function MapEnhanced() {
     }
   }, [signalements]); // Dépendance sur les signalements
 
+  // Nombre de filtres actifs pour afficher badge sur la bulle 'options'
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
+  const hasFilters = activeFilterCount > 0;
+
   return (
     <View style={styles.container}>
       <MapView
@@ -852,12 +1007,7 @@ function MapEnhanced() {
           latitudeDelta: 0.01,
           longitudeDelta: 0.01,
         } : BORDEAUX_REGION}
-        onPress={isPlacingSignal ? (event) => {
-          const { latitude, longitude } = event.nativeEvent.coordinate;
-          sendSignalement(selectedSignalType, latitude, longitude);
-          setIsPlacingSignal(false);
-          setSelectedSignalType(null);
-        } : handleMapPress}
+        onPress={handleMapPress}
         showsUserLocation={locationPermission}
         showsMyLocationButton={false}
         followsUserLocation={isNavigating}
@@ -1017,53 +1167,42 @@ function MapEnhanced() {
       {/* Interface utilisateur */}
       <View style={styles.overlay}>
         {/* Header avec infos route - Affiché seulement si pas en navigation */}
-        {routeInfo && !isNavigating && (
-          <View style={styles.header}>
-            <View style={styles.routeInfo}>
-              <Text style={styles.routeText}>
-                📍 {routeInfo.distance} km • ⏱️ {routeInfo.duration} min
-              </Text>
-              {navigationInstructions.length > 0 && (
-                <TouchableOpacity style={styles.startNavButton} onPress={startNavigation}>
-                  <Text style={styles.startNavButtonText}>🧭 Démarrer la navigation</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-        )}
 
-        {/* Header compact pendant la navigation */}
+        {/* Header compact pendant la navigation - nouvelle disposition expérimentale */}
         {isNavigating && routeInfo && (
-          <View style={styles.compactHeader}>
-            <View style={styles.compactRouteInfo}>
-              <Text style={styles.compactRouteText}>
-                📍 {routeInfo.distance} km • ⏱️ {routeInfo.duration} min
-              </Text>
-              <TouchableOpacity style={styles.stopNavButton} onPress={stopNavigation}>
-                <Text style={styles.stopNavButtonText}>⏹️ Arrêter</Text>
+          <View style={styles.newNavContainer}>
+            {/* Large central bubble with icon */}
+            <View style={styles.instructionBubbleWrapper}>
+              <View style={styles.instructionBubble}>
+                <Ionicons name={currentInstruction?.icon || 'navigate'} size={30} color="white" />
+              </View>
+              {/* Distance badge (small circle) */}
+              <View style={styles.distanceBadge}>
+                <Text style={{ color: 'white', fontWeight: '700' }}>{getDistanceToCurrentInstruction() || ''}</Text>
+              </View>
+            </View>
+
+            {/* Main short instruction centered */}
+            <Text style={styles.newInstructionText} numberOfLines={2} ellipsizeMode="tail">
+              {currentInstruction ? currentInstruction.shortText : 'Suivre la route'}
+            </Text>
+
+            {/* Progress bar (full-width thin) */}
+            <View style={styles.newProgressBarBackground}>
+              <View style={[styles.newProgressBarFill, { width: `${getNavigationProgress() * 100}%`}]} />
+            </View>
+
+            {/* Controls row: Steps and Stop */}
+            <View style={styles.newControlRow}>
+              <TouchableOpacity style={styles.controlButton} onPress={() => setShowStepsModal(true)} accessibilityLabel="Voir les étapes">
+                <Ionicons name="list" size={20} color="#1A8D5B" />
+                <Text style={styles.controlButtonText}>Étapes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.controlButton, styles.controlStopButton]} onPress={stopNavigation} accessibilityLabel="Arrêter la navigation">
+                <Ionicons name="close" size={20} color="white" />
+                <Text style={[styles.controlButtonText, { color: 'white' }]}>Stop</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        )}
-
-        {/* Affichage des instructions contextuelles - Masqué pendant la navigation */}
-        {!routeInfo && !isNavigating && (
-          <View style={styles.instructions}>
-            {!locationPermission && (
-              <Text style={styles.instructionText}>
-                📍 Permission de localisation requise
-              </Text>
-            )}
-            {locationPermission && !userLocation && (
-              <Text style={styles.instructionText}>
-                📍 Obtention de votre position...
-              </Text>
-            )}
-            {userLocation && (
-              <Text style={styles.instructionText}>
-                🎯 Touchez la carte pour choisir votre destination ou utilisez la recherche
-              </Text>
-            )}
           </View>
         )}
 
@@ -1071,49 +1210,190 @@ function MapEnhanced() {
         {!isNavigating && (
           <View style={styles.searchContainer}>
             <View style={styles.searchRow}>
-              <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
-                <Ionicons name="search" size={20} color="#666" />
+              <TouchableOpacity
+                style={[
+                  styles.searchBarToggle,
+                  isSearchExpanded && { backgroundColor: '#E8F5E8', borderColor: '#1A8D5B', borderWidth: 1 }
+                ]}
+                onPress={toggleSearchBar}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="search" size={22} color="#1A8D5B" style={{ marginRight: 8 }} />
                 <Text
-                  style={styles.searchBarText}
+                  style={[
+                    styles.searchBarText,
+                    isSearchExpanded && { color: '#1A8D5B', fontWeight: 'bold' }
+                  ]}
                   numberOfLines={1}
                   ellipsizeMode="tail"
                 >
-                  Rechercher une destination
+                  Entrer une destination
                 </Text>
                 <Ionicons
                   name={isSearchExpanded ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color="#666"
+                  size={22}
+                  color="#1A8D5B"
+                  style={{
+                    transform: [{ rotate: isSearchExpanded ? '180deg' : '0deg' }],
+                    transition: 'transform 0.2s',
+                  }}
                 />
               </TouchableOpacity>
             </View>
+            {/* Animation de transition fluide */}
             {isSearchExpanded && (
-              <View style={styles.expandedSearch}>
-                <TouchableOpacity
-                  style={[styles.searchOption, startPoint && styles.searchOptionActive]}
-                  onPress={() => openSearchModal('start')}
-                >
-                  <Ionicons name="play-circle" size={18} color={startPoint ? "#1A8D5B" : "#666"} />
-                  <Text style={[styles.searchOptionText, startPoint && styles.searchOptionTextActive]}>
-                    {startPoint ? "Départ défini ✓" : "Choisir le départ"}
-                  </Text>
-                </TouchableOpacity>
+              <View style={{
+                ...styles.expandedSearch,
+                opacity: isSearchExpanded ? 1 : 0,
+                transform: [{ scaleY: isSearchExpanded ? 1 : 0.95 }],
+                transition: 'opacity 0.2s, transform 0.2s',
+              }}>
+                  {/* Inline inputs: Start and Destination */}
+                  <View style={{ padding: 8 }}>
+                    <View style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Départ</Text>
+                      {!isStartEditing ? (
+                        <TouchableOpacity
+                          style={[styles.searchInput, { marginBottom: 6, flexDirection: 'row', alignItems: 'center' }]}
+                          onPress={() => setIsStartEditing(true)}
+                        >
+                          <Ionicons name="person" size={18} color="#1A8D5B" style={{ marginRight: 8 }} />
+                          <Text style={{ color: startQuery ? '#000' : '#666' }}>
+                            {startQuery ? startQuery : (startPoint || userLocation ? 'Ma position' : 'Tapez pour définir')}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TextInput
+                          style={[styles.searchInput, { marginBottom: 6 }]}
+                          placeholder={startPoint ? 'Départ défini (tape pour modifier)' : 'Entrez le départ'}
+                          value={startQuery}
+                          onBlur={() => setIsStartEditing(false)}
+                          onChangeText={(text) => {
+                            setStartQuery(text);
+                            // debounce
+                            if (startTimerRef.current) clearTimeout(startTimerRef.current);
+                            if (!text.trim()) {
+                              setStartResults([]);
+                              return;
+                            }
+                            startTimerRef.current = setTimeout(() => {
+                              setIsStartSearching(true);
+                              // reuse api-adresse
+                              fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(text)}&limit=5&lat=44.837789&lon=-0.57918`)
+                                .then(r => r.json())
+                                .then(data => {
+                                  if (data && data.features) {
+                                    const results = data.features.map(f => ({
+                                      id: f.properties.id,
+                                      label: f.properties.label,
+                                      coordinates: { latitude: f.geometry.coordinates[1], longitude: f.geometry.coordinates[0] }
+                                    }));
+                                    setStartResults(results);
+                                  } else setStartResults([]);
+                                })
+                                .catch(e => { console.error('search start', e); setStartResults([]); })
+                                .finally(() => setIsStartSearching(false));
+                            }, 300);
+                          }}
+                        />
+                      )}
+                      {/* Start suggestions */}
+                      {isStartSearching ? (
+                        <ActivityIndicator size="small" color="#1A8D5B" />
+                      ) : (
+                        startResults.map(res => (
+                          <TouchableOpacity key={res.id} style={styles.searchResultItem} onPress={() => {
+                            // set as start
+                            Keyboard.dismiss();
+                            setStartPoint(res.coordinates);
+                            setStartQuery(res.label);
+                            setStartResults([]);
+                            setIsStartEditing(false);
+                            // if end exists, compute route
+                            if (endPoint) getRoute(res.coordinates, endPoint);
+                          }}>
+                            <Ionicons name="location" size={18} color="#1A8D5B" />
+                            <Text style={styles.searchResultText}>{res.label}</Text>
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </View>
 
-                <TouchableOpacity
-                  style={[styles.searchOption, endPoint && styles.searchOptionActive]}
-                  onPress={() => openSearchModal('end')}
-                >
-                  <Ionicons name="flag" size={18} color={endPoint ? "#1A8D5B" : "#666"} />
-                  <Text style={[styles.searchOptionText, endPoint && styles.searchOptionTextActive]}>
-                    {endPoint ? "Arrivée définie ✓" : "Choisir l'arrivée"}
-                  </Text>
+                    <View>
+                      <Text style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Destination</Text>
+                      <TextInput
+                        style={[styles.searchInput, { marginBottom: 6 }]}
+                        placeholder={endPoint ? 'Destination définie (tape pour modifier)' : 'Entrez la destination'}
+                        value={endQuery}
+                        onChangeText={(text) => {
+                          setEndQuery(text);
+                          if (endTimerRef.current) clearTimeout(endTimerRef.current);
+                          if (!text.trim()) { setEndResults([]); return; }
+                          endTimerRef.current = setTimeout(() => {
+                            setIsEndSearching(true);
+                            fetch(`https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(text)}&limit=5&lat=44.837789&lon=-0.57918`)
+                              .then(r => r.json())
+                              .then(data => {
+                                if (data && data.features) {
+                                  const results = data.features.map(f => ({
+                                    id: f.properties.id,
+                                    label: f.properties.label,
+                                    coordinates: { latitude: f.geometry.coordinates[1], longitude: f.geometry.coordinates[0] }
+                                  }));
+                                  setEndResults(results);
+                                } else setEndResults([]);
+                              })
+                              .catch(e => { console.error('search end', e); setEndResults([]); })
+                              .finally(() => setIsEndSearching(false));
+                          }, 300);
+                        }}
+                      />
+                      {isEndSearching ? (
+                        <ActivityIndicator size="small" color="#1A8D5B" />
+                      ) : (
+                        endResults.map(res => (
+                          <TouchableOpacity key={res.id} style={styles.searchResultItem} onPress={() => {
+                            // select destination
+                            const dest = res.coordinates;
+                            Keyboard.dismiss();
+                            setEndPoint(dest);
+                            setEndQuery(res.label);
+                            setEndResults([]);
+                            if (startPoint) {
+                              getRoute(startPoint, dest);
+                            } else if (userLocation) {
+                              setStartPoint(userLocation);
+                              getRoute(userLocation, dest);
+                            }
+                          }}>
+                            <Ionicons name="location" size={18} color="#1A8D5B" />
+                            <Text style={styles.searchResultText}>{res.label}</Text>
+                          </TouchableOpacity>
+                        ))
+                      )}
+                    </View>
+                  </View>
+              </View>
+            )}
+            {/* Route summary — visible si on a calculé un itinéraire et pas encore en navigation */}
+            {routeInfo && !isNavigating && (
+              <View style={styles.routeSummary}>
+                <View style={styles.routeIconContainer}>
+                  <Ionicons name="bicycle" size={20} color="#1A8D5B" />
+                </View>
+                <View style={styles.routeSummaryText}>
+                  <Text style={styles.routeType}>Vélo — Itinéraire</Text>
+                  <Text style={styles.routeMetrics}>{routeInfo.distance} km • {routeInfo.duration} min</Text>
+                </View>
+                <TouchableOpacity style={styles.routeRemoveButton} onPress={clearRoute} accessibilityLabel="Retirer l'itinéraire">
+                  <Ionicons name="stop" size={16} color="white" />
+                  <Text style={styles.routeRemoveText}>Arrêter</Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         )}
 
-        {/* Bulles simples pour domicile et travail - Masquées pendant la navigation */}
         {!isNavigating && (
           <View style={styles.simpleBubbles}>
             <TouchableOpacity
@@ -1133,10 +1413,15 @@ function MapEnhanced() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.simpleBubble}
+              style={[styles.simpleBubble, hasFilters && styles.simpleBubbleActive]}
               onPress={() => setShowFiltersModal(true)}
             >
               <Ionicons name="options" size={24} color="#1A8D5B" />
+              {hasFilters && (
+                <View style={styles.filterBadge} pointerEvents="none">
+                  <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
         )}
@@ -1147,86 +1432,27 @@ function MapEnhanced() {
             <Text style={styles.loadingText}>Calcul de l'itinéraire...</Text>
           </View>
         )}
-
-        {/* Indicateur de chargement des services */}
-        {isLoadingServices && (
-          <View style={styles.servicesLoading}>
-            <ActivityIndicator size="small" color="#1A8D5B" />
-            <Text style={styles.servicesLoadingText}>Chargement des services vélo...</Text>
-          </View>
-        )}
-
-        {/* Indicateur de chargement des arceaux */}
-        {isLoadingArceaux && (
-          <View style={styles.servicesLoading}>
-            <ActivityIndicator size="small" color="#1A8D5B" />
-            <Text style={styles.servicesLoadingText}>Chargement des arceaux vélo...</Text>
-          </View>
-        )}
-
-        {/* Indicateur de chargement des services freefloating */}
-        {isLoadingFreeFloating && (
-          <View style={styles.servicesLoading}>
-            <ActivityIndicator size="small" color="#1A8D5B" />
-            <Text style={styles.servicesLoadingText}>Chargement freefloating...</Text>
-          </View>
-        )}
-
-        {/* Indicateur de chargement des stations Le Vélo */}
-        {isLoadingVeloStations && (
-          <View style={styles.servicesLoading}>
-            <ActivityIndicator size="small" color="#1A8D5B" />
-            <Text style={styles.servicesLoadingText}>Chargement des stations Le Vélo...</Text>
-          </View>
-        )}
-
-        {/* Indicateur de chargement des signalements */}
-        {isLoadingSignalements && (
-          <View style={styles.servicesLoading}>
-            <ActivityIndicator size="small" color="#FF5722" />
-            <Text style={styles.servicesLoadingText}>Chargement des signalements...</Text>
-          </View>
-        )}
-
       </View>
 
-      {/* Bulle Ma position en bas à gauche */}
-      <TouchableOpacity
-        style={styles.locationBubble}
-        onPress={getUserLocation}
-      >
-        <Ionicons name="locate" size={24} color="#1A8D5B" />
-      </TouchableOpacity>
-
-      {/* Bulle Reset en bas à droite */}
-      <TouchableOpacity
-        style={styles.resetBubble}
-        onPress={resetRoute}
-      >
-        <Ionicons name="refresh" size={24} color="#FF5722" />
-      </TouchableOpacity>
-
-      {/* Bouton lancer le trajet - Affiché seulement si itinéraire calculé et pas en navigation */}
-      {routeInfo && !isNavigating && (
-        <TouchableOpacity style={styles.startJourneyButtonBottom} onPress={startNavigation}>
-          <Ionicons name="navigate" size={24} color="white" />
-          <Text style={styles.startJourneyText}>Lancer le trajet</Text>
+      {/* Bottom control row: recenter, start, signalement - unified size and alignment */}
+      <View style={styles.bottomControlsRow} pointerEvents="box-none">
+        <TouchableOpacity style={styles.controlCircle} onPress={getUserLocation} accessibilityLabel="Recentrer la carte">
+          <Ionicons name="locate" size={22} color="#1A8D5B" />
         </TouchableOpacity>
-      )}
 
-      {/* Carte de navigation flottante - Remplace le bouton pendant la navigation */}
-      {isNavigating && currentInstruction && (
-        <View style={styles.navigationCard}>
-          <View style={styles.navigationContent}>
-            <Text style={styles.distanceText}>
-              {getDistanceToCurrentInstruction()}
-            </Text>
-            <Text style={styles.navigationInstructionText}>
-              {currentInstruction.instruction}
-            </Text>
-          </View>
-        </View>
-      )}
+        {routeInfo && !isNavigating ? (
+          <TouchableOpacity style={[styles.controlCircle, styles.controlCirclePrimary]} onPress={startNavigation} accessibilityLabel="Lancer la navigation">
+            <Ionicons name="navigate" size={22} color="white" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.controlCirclePlaceholder} />
+        )}
+
+        <TouchableOpacity style={styles.controlCircle} onPress={() => setShowSignalModal(true)} accessibilityLabel="Signalement">
+          <Ionicons name="warning" size={22} color="#FF5722" />
+        </TouchableOpacity>
+      </View>
+      {/* floating stop removed - action moved into route summary */}
 
       {/* Modal de recherche */}
       <Modal
@@ -1235,11 +1461,13 @@ function MapEnhanced() {
         transparent={true}
         onRequestClose={() => setShowSearchModal(false)}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalContainer}
-        >
-          <View style={styles.modalContent}>
+        <TouchableWithoutFeedback onPress={() => setShowSearchModal(false)}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContainer}
+          >
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {searchType === 'start' ? '📍 Choisir le départ' :
@@ -1293,8 +1521,10 @@ function MapEnhanced() {
                 ))
               )}
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+              </View>
+            </TouchableWithoutFeedback>
+          </KeyboardAvoidingView>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Détails de la station sélectionnée */}
@@ -1336,23 +1566,25 @@ function MapEnhanced() {
         transparent={true}
         onRequestClose={() => setShowFiltersModal(false)}
       >
-        <View style={{
-          flex: 1,
-          backgroundColor: 'rgba(0,0,0,0.3)',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}>
+        <TouchableWithoutFeedback onPress={() => setShowFiltersModal(false)}>
           <View style={{
-            backgroundColor: 'white',
-            borderRadius: 18,
-            padding: 28,
-            width: '85%',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            elevation: 8,
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.3)',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={{
+                backgroundColor: 'white',
+                borderRadius: 18,
+                padding: 28,
+                width: '85%',
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.2,
+                shadowRadius: 8,
+                elevation: 8,
+              }}>
             <Text style={{ fontWeight: 'bold', fontSize: 18, marginBottom: 18, color: '#1A8D5B' }}>
               Filtres d'affichage
             </Text>
@@ -1385,78 +1617,96 @@ function MapEnhanced() {
             >
               <Text style={{ color: '#1A8D5B', fontWeight: 'bold', fontSize: 16 }}>Fermer</Text>
             </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Modal de signalement */}
       <Modal
         visible={showSignalModal}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowSignalModal(false)}
       >
-        <View style={styles.signalModalOverlay}>
-          <View style={styles.signalModalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.signalModalHeader}>
-              <Text style={styles.signalModalTitle}>🚨 Faire un signalement</Text>
-              <TouchableOpacity onPress={() => setShowSignalModal(false)}>
-                <Ionicons name="close" size={24} color="#666" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.signalTypesContainer}>
+        <TouchableWithoutFeedback onPress={() => setShowSignalModal(false)}>
+          <View style={styles.signalModalOverlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>{/* prevent inner taps from closing */}
+              <View style={styles.signalModalContent}>
+                <View style={styles.modalHandle} />
+                {/* no title or close button — tapping outside will dismiss */}
+                <ScrollView style={styles.signalTypesContainer}>
               {Object.values(SIGNAL_TYPES).map((signalType) => (
                 <TouchableOpacity
                   key={signalType.id}
                   style={[styles.signalTypeButton, { backgroundColor: signalType.backgroundColor }]}
                   onPress={() => {
-                    setSelectedSignalType(signalType);
-                    setIsPlacingSignal(true);
+                    // Send report immediately from current user location
                     setShowSignalModal(false);
-                    Alert.alert(
-                      'Placer le signalement',
-                      'Appuyez sur la carte à l\'endroit où vous souhaitez signaler ce problème ou utilisez le bouton en bas à droite pour le placer à votre position actuelle.'
-                    );
+                    if (!userLocation) {
+                      showTransientMessage('Position introuvable');
+                      return;
+                    }
+                    sendSignalement(signalType, userLocation.latitude, userLocation.longitude);
                   }}
                 >
                   <View style={styles.signalTypeContent}>
-                    <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}>
+                    <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}> 
                       <Ionicons name={signalType.icon} size={24} color="white" />
                     </View>
                     <Text style={styles.signalTypeText}>{signalType.title}</Text>
                   </View>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
-            <Text style={styles.signalInstructions}>
-              Sélectionnez le type de signalement, puis appuyez sur la carte à l'endroit souhaité
-              {"\n"}ou utilisez le bouton "Placer à ma position actuelle".
-            </Text>
+                </ScrollView>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Bulle de signalement */}
-      <TouchableOpacity
-        style={[styles.signalBubble, { bottom: 100 }]} // Décale le bouton au-dessus du reset
-        onPress={() => setShowSignalModal(true)}
+      {/* Modal des étapes (itinéraire) */}
+      <Modal
+        visible={showStepsModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowStepsModal(false)}
       >
-        <Ionicons name="warning" size={24} color="#FF5722" />
-      </TouchableOpacity>
+        <TouchableWithoutFeedback onPress={() => setShowStepsModal(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View style={{ backgroundColor: 'white', width: '86%', maxHeight: height * 0.7, borderRadius: 14, padding: 16 }}>
+                <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 12 }}>Étapes</Text>
+                <ScrollView>
+                  {navigationInstructions.map(inst => (
+                    <View key={inst.id} style={{ paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name={inst.icon || 'navigate'} size={18} color="#1A8D5B" style={{ width: 26 }} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: inst.id === getCurrentInstructionIndex() ? '700' : '400' }}>{inst.shortText}</Text>
+                        {/* show full instruction in smaller text */}
+                        <Text style={{ color: '#666', fontSize: 12 }}>{inst.full}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity style={{ marginTop: 12, alignSelf: 'flex-end' }} onPress={() => setShowStepsModal(false)}>
+                  <Text style={{ color: '#1A8D5B', fontWeight: '700' }}>Fermer</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
-      {/* Bulle pour placer le signalement à ma position */}
-      {userLocation && selectedSignalType && isPlacingSignal && (
-        <TouchableOpacity
-          style={styles.placeAtMyPositionBubble}
-          onPress={() => {
-            sendSignalement(selectedSignalType, userLocation.latitude, userLocation.longitude);
-            setIsPlacingSignal(false);
-            setSelectedSignalType(null);
-          }}
-        >
-          <Ionicons name="locate" size={22} color="white" />
-        </TouchableOpacity>
+
+      {/* Toast notification for transient messages */}
+      {showToast && (
+        <View style={styles.toastContainer} pointerEvents="none">
+          <View style={styles.toastBox}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </View>
+        </View>
       )}
     </View>
   );
@@ -1477,11 +1727,12 @@ const styles = StyleSheet.create({
     right: 15,
     zIndex: 1000,
   },
+  // logoRow and logoImage removed per user request
   header: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 15,
-    borderRadius: 15,
-    marginBottom: 10,
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1490,15 +1741,185 @@ const styles = StyleSheet.create({
   },
   // Header compact pendant la navigation
   compactHeader: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 10,
     borderRadius: 12,
     marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  compactTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  progressBarBackground: {
+    height: 10,
+    backgroundColor: '#E6F4EA',
+    borderRadius: 8,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 10,
+    backgroundColor: '#0E7A43',
+  },
+  compactIconButton: {
+    backgroundColor: 'white',
+    padding: 10,
+    borderRadius: 12,
+    marginLeft: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+  },
+  stopNavButtonLarge: {
+    backgroundColor: '#E03636',
+    padding: 10,
+    borderRadius: 14,
+    marginLeft: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 54,
+  },
+  stopNavButtonTextLarge: {
+    color: 'white',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  navInstructionRow: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  navInstructionDistance: {
+    color: '#1A8D5B',
+    marginRight: 8,
+    fontWeight: '900',
+  },
+  navInstructionText: {
+    flex: 1,
+    color: '#333',
+    fontWeight: '600',
+  },
+  navInstructionRowLarge: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  navInstructionLeft: {
+    width: 90,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navInstructionRight: {
+    flex: 1,
+    paddingLeft: 8,
+    paddingRight: 6,
+  },
+  navInstructionDistanceLarge: {
+    color: 'white',
+    backgroundColor: '#1A8D5B',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    fontWeight: '900',
+    fontSize: 18,
+  },
+  navInstructionTextLarge: {
+    color: '#222',
+    fontWeight: '800',
+    fontSize: 18,
+  },
+  // New experimental navigation layout
+  newNavContainer: {
+    backgroundColor: 'rgba(255,255,255,0.98)',
+    padding: 12,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  instructionBubbleWrapper: {
+    position: 'relative',
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  instructionBubble: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#1A8D5B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  distanceBadge: {
+    position: 'absolute',
+    right: -10,
+    bottom: -8,
+    backgroundColor: '#E03636',
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  newInstructionText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#222',
+    textAlign: 'center',
+    marginBottom: 8,
+    maxWidth: '82%',
+  },
+  newProgressBarBackground: {
+    width: '100%',
+    height: 6,
+    backgroundColor: '#F0F0F0',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  newProgressBarFill: {
+    height: 6,
+    backgroundColor: '#1A8D5B',
+  },
+  newControlRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  controlButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    borderWidth: 1,
+    borderColor: '#EAEAEA',
+  },
+  controlButtonText: {
+    marginLeft: 8,
+    color: '#1A8D5B',
+    fontWeight: '700',
+  },
+  controlStopButton: {
+    backgroundColor: '#E03636',
+    borderColor: '#E03636',
   },
   compactRouteInfo: {
     flexDirection: 'row',
@@ -1506,21 +1927,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   compactRouteText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#1A8D5B',
     fontWeight: '600',
     flex: 1,
   },
   routeInfo: {
     marginTop: 10,
-    padding: 12,
+    padding: 14,
     backgroundColor: '#E8F5E8',
     borderRadius: 10,
     borderLeftWidth: 4,
     borderLeftColor: '#1A8D5B',
   },
   routeText: {
-    fontSize: 16,
+    fontSize: 17,
     textAlign: 'center',
     color: '#1A8D5B',
     fontWeight: '600',
@@ -1528,7 +1949,7 @@ const styles = StyleSheet.create({
   startNavButton: {
     backgroundColor: '#4CAF50',
     padding: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     marginTop: 10,
   },
   startNavButtonText: {
@@ -1540,19 +1961,19 @@ const styles = StyleSheet.create({
   stopNavButton: {
     backgroundColor: '#F44336',
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 10,
     marginLeft: 10,
   },
   stopNavButtonText: {
     color: 'white',
     textAlign: 'center',
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 13,
   },
   instructions: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1561,7 +1982,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   instructionText: {
-    fontSize: 14,
+    fontSize: 15,
     textAlign: 'center',
     color: '#666',
   },
@@ -1577,8 +1998,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     paddingVertical: 12,
-    paddingHorizontal: 8, // réduit de 10 à 8
-    borderRadius: 12,
+    paddingHorizontal: 10,
+    borderRadius: 14,
     flexDirection: 'row',
     alignItems: 'center',
     minWidth: 0,
@@ -1590,15 +2011,15 @@ const styles = StyleSheet.create({
   },
   searchBarText: {
     flex: 1,
-    marginLeft: 10,
-    fontSize: 16,
+    marginLeft: 12,
+    fontSize: 17,
     color: '#666',
     minWidth: 0,
   },
   expandedSearch: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    marginTop: 5,
+    borderRadius: 14,
+    marginTop: 6,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -1609,7 +2030,7 @@ const styles = StyleSheet.create({
   searchOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0F0F0',
   },
@@ -1617,8 +2038,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(26, 141, 91, 0.05)',
   },
   searchOptionText: {
-    marginLeft: 10,
-    fontSize: 15,
+    marginLeft: 12,
+    fontSize: 16,
     color: '#666',
   },
   searchOptionTextActive: {
@@ -1628,14 +2049,14 @@ const styles = StyleSheet.create({
   simpleBubbles: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 16,
   },
   simpleBubble: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 15,
-    borderRadius: 50,
-    marginHorizontal: 15,
+    padding: 14,
+    borderRadius: 46,
+    marginHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1645,20 +2066,23 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 2,
     borderColor: 'transparent',
-    width: 60,
-    height: 60,
+    width: 64,
+    height: 64,
+    position: 'relative',
   },
   simpleBubbleActive: {
-    backgroundColor: 'rgba(26, 141, 91, 0.1)',
+    // Only show a stroke when a saved place exists — keep white background and show green stroke
+    backgroundColor: 'white',
     borderColor: '#1A8D5B',
+    borderWidth: 2,
   },
   locationBubble: {
     position: 'absolute',
     bottom: 30,
     left: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 15,
-    borderRadius: 50,
+    padding: 14,
+    borderRadius: 44,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1668,8 +2092,8 @@ const styles = StyleSheet.create({
     elevation: 3,
     borderWidth: 2,
     borderColor: 'transparent',
-    width: 60,
-    height: 60,
+    width: 64,
+    height: 64,
     zIndex: 1000,
   },
   resetBubble: {
@@ -1677,8 +2101,8 @@ const styles = StyleSheet.create({
     bottom: 30,
     right: 20,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 15,
-    borderRadius: 50,
+    padding: 12,
+    borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -1692,29 +2116,83 @@ const styles = StyleSheet.create({
     height: 60,
     zIndex: 1000,
   },
+  bottomControlsRow: {
+    position: 'absolute',
+    bottom: 28,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-evenly',
+    alignItems: 'center',
+    zIndex: 1200,
+    paddingHorizontal: 20,
+  },
+  controlCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'white',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(0,0,0,0.05)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  controlCirclePrimary: {
+    backgroundColor: '#1A8D5B',
+    borderColor: '#1A8D5B',
+  },
+  controlCirclePlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'transparent',
+  },
   startJourneyButtonBottom: {
     position: 'absolute',
-    bottom: 100,
-    left: 20,
-    right: 20,
+    bottom: 90,
+    alignSelf: 'center',
+    width: '62%',
+    maxWidth: 340,
     backgroundColor: '#1A8D5B',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 18,
-    borderRadius: 15,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
     elevation: 6,
     zIndex: 1000,
   },
   startJourneyText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  routeRemoveButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  routeRemoveText: {
+    color: 'white',
+    fontWeight: '700',
+    marginLeft: 6,
+    fontSize: 13,
   },
   // Carte de navigation flottante
   navigationCard: {
@@ -1747,13 +2225,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 14,
     fontWeight: '500',
   },
   loading: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    padding: 20,
-    borderRadius: 15,
+    padding: 16,
+    borderRadius: 14,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -1769,8 +2247,8 @@ const styles = StyleSheet.create({
   },
   startMarker: {
     backgroundColor: '#1A8D5B',
-    borderRadius: 20,
-    padding: 8,
+    borderRadius: 16,
+    padding: 6,
     borderWidth: 3,
     borderColor: 'white',
     shadowColor: '#000',
@@ -1781,8 +2259,8 @@ const styles = StyleSheet.create({
   },
   endMarker: {
     backgroundColor: '#FF5722',
-    borderRadius: 20,
-    padding: 8,
+    borderRadius: 16,
+    padding: 6,
     borderWidth: 3,
     borderColor: 'white',
     shadowColor: '#000',
@@ -1801,26 +2279,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFDF3',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    minHeight: height * 0.4,
-    maxHeight: height * 0.7,
-    paddingBottom: 34,
+    minHeight: height * 0.35,
+    maxHeight: height * 0.65,
+    paddingBottom: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    padding: 24,
     borderBottomWidth: 1,
     borderBottomColor: '#E0E0E0',
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 22,
+    fontWeight: '700',
     color: '#1A8D5B',
   },
   searchInput: {
-    margin: 20,
-    padding: 15,
+    margin: 14,
+    padding: 12,
     borderWidth: 1,
     borderColor: '#E0E0E0',
     borderRadius: 12,
@@ -1830,8 +2308,8 @@ const styles = StyleSheet.create({
   currentLocationButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    marginHorizontal: 20,
+    padding: 12,
+    marginHorizontal: 18,
     backgroundColor: '#E8F5E8',
     borderRadius: 12,
     marginBottom: 10,
@@ -1848,15 +2326,15 @@ const styles = StyleSheet.create({
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 15,
-    marginHorizontal: 20,
-    marginBottom: 5,
+    padding: 12,
+    marginHorizontal: 18,
+    marginBottom: 8,
     backgroundColor: '#F9F9F9',
     borderRadius: 10,
   },
   searchResultText: {
-    marginLeft: 10,
-    fontSize: 14,
+    marginLeft: 12,
+    fontSize: 15,
     color: '#333',
     flex: 1,
   },
@@ -1872,6 +2350,55 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+
+  // Route summary compact
+  routeSummary: {
+    marginTop: 12,
+    backgroundColor: 'white',
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  routeIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  routeSummaryText: {
+    flex: 1,
+  },
+  routeType: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '600',
+  },
+  routeMetrics: {
+    fontSize: 14,
+    color: '#666',
+    marginTop: 2,
+  },
+  routeActionButton: {
+    backgroundColor: '#1A8D5B',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  routeActionText: {
+    color: 'white',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  // removed routeCloseButton (replaced by routeRemoveButton)
 
   servicesLoading: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -1895,8 +2422,8 @@ const styles = StyleSheet.create({
   filterButton: {
     marginLeft: 8,
     backgroundColor: 'rgba(255,255,255,0.95)',
-    padding: 8, // réduit de 10 à 8
-    borderRadius: 12,
+    padding: 6,
+    borderRadius: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -1936,16 +2463,21 @@ const styles = StyleSheet.create({
   },
   signalModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   signalModalContent: {
-    backgroundColor: '#FAFDF3',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    minHeight: height * 0.4,
-    maxHeight: height * 0.7,
-    paddingBottom: 34,
+    backgroundColor: 'white',
+    borderRadius: 18,
+    padding: 28,
+    width: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+    maxHeight: height * 0.75,
   },
   modalHandle: {
     width: 40,
@@ -1990,6 +2522,30 @@ const styles = StyleSheet.create({
     color: '#333',
     flex: 1,
   },
+  filterBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#FF5722',
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: 'white',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.12,
+    shadowRadius: 2,
+    elevation: 4,
+  },
+  filterBadgeText: {
+    color: 'white',
+    fontSize: 11,
+    fontWeight: '800',
+  },
   signalInstructions: {
     textAlign: 'center',
     fontSize: 14,
@@ -1998,23 +2554,31 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     fontStyle: 'italic',
   },
-  placeAtMyPositionBubble: {
+  toastContainer: {
     position: 'absolute',
+    top: '50%',
+    left: 20,
     right: 20,
-    bottom: 100,
-    backgroundColor: '#FF5722',
-    padding: 15,
-    borderRadius: 50,
     alignItems: 'center',
-    justifyContent: 'center',
+    zIndex: 2000,
+    pointerEvents: 'none',
+    transform: [{ translateY: -28 }],
+  },
+  toastBox: {
+    backgroundColor: 'rgba(26,141,91,0.92)', // green close to the app palette, slightly transparent
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    width: 60,
-    height: 60,
-    zIndex: 1000,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 6,
+    opacity: 0.95,
+  },
+  toastText: {
+    color: 'white',
+    fontWeight: '700',
   },
 });
 

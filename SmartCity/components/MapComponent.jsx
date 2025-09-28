@@ -118,15 +118,14 @@ function MapComponent() {
     const φ2 = lat2 * Math.PI / 180;
     const Δφ = (lat2 - lat1) * Math.PI / 180;
     const Δλ = (lon2 - lon1) * Math.PI / 180;
-
     const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
               Math.cos(φ1) * Math.cos(φ2) *
               Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
     return R * c;
   };
 
+  // Fonction pour récupérer l'itinéraire via OpenRouteService (POST simple)
   const getRoute = async (start, end) => {
     if (!ORS_API_KEY) {
       Alert.alert('Erreur', 'Clé API non configurée');
@@ -135,43 +134,103 @@ function MapComponent() {
 
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
-        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`
-      );
-      
-      if (!response.ok) {
-        throw new Error('Erreur API OpenRouteService');
-      }
-      
-      const data = await response.json();
-      
+      const body = {
+        coordinates: [
+          [start.longitude, start.latitude],
+          [end.longitude, end.latitude]
+        ],
+        instructions: true,
+        units: 'm'
+      };
+
+      const url = 'https://api.openrouteservice.org/v2/directions/cycling-regular/geojson';
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json, text/plain, */*',
+          'Content-Type': 'application/json; charset=utf-8',
+          'Authorization': ORS_API_KEY,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) throw new Error(`ORS HTTP ${resp.status}`);
+
+      const data = await resp.json();
       if (data.features && data.features.length > 0) {
         const coordinates = data.features[0].geometry.coordinates.map(coord => ({
           latitude: coord[1],
           longitude: coord[0],
         }));
-        
+
         const properties = data.features[0].properties.segments[0];
-        const distance = (properties.distance / 1000).toFixed(1); // km
-        const duration = Math.round(properties.duration / 60); // minutes
-        
-        // Extraire les instructions de navigation
+        const distance = (properties.distance / 1000).toFixed(1);
+        const duration = Math.round(properties.duration / 60);
+
+        // Simplify long ORS instructions into compact icon + shortText for glanceable UI
+        const simplifyStep = (step, coords) => {
+          const text = (step.instruction || '').toLowerCase();
+          let icon = 'navigate';
+          let short = 'Suivre';
+
+          if (text.includes('droite') || text.includes('turn right') || text.includes('right')) {
+            icon = 'arrow-forward';
+            short = 'Droite';
+          } else if (text.includes('gauche') || text.includes('turn left') || text.includes('left')) {
+            icon = 'arrow-back';
+            short = 'Gauche';
+          } else if (text.includes('rond') || text.includes('roundabout')) {
+            icon = 'sync';
+            let exitNum = null;
+            const exitRegex1 = /(?:sortie|exit)\s*(?:n(?:°|o)?\s*)?(\d+)/i;
+            const exitRegex2 = /take the\s*(\d+)(?:st|nd|rd|th)?\s*exit/i;
+            const m1 = step.instruction && step.instruction.match(exitRegex1);
+            const m2 = step.instruction && step.instruction.match(exitRegex2);
+            if (m1 && m1[1]) exitNum = m1[1];
+            else if (m2 && m2[1]) exitNum = m2[1];
+            if (exitNum) {
+              const n = parseInt(exitNum, 10);
+              const ordinal = (n === 1) ? '1ère' : `${n}ème`;
+              short = `Rond-point ${ordinal} sortie`;
+            } else {
+              short = 'Rond-point';
+            }
+          } else if (text.includes('arriv') || text.includes('destination') || text.includes('finish')) {
+            icon = 'flag';
+            short = 'Arrivée';
+          } else if (text.includes('continuer') || text.includes('straight') || text.includes('continue')) {
+            icon = 'arrow-up';
+            short = 'Tout droit';
+          } else {
+            icon = 'navigate';
+            short = text.split('.').shift().slice(0, 18) || 'Suivre';
+          }
+
+          const dist = step.distance ? `${Math.round(step.distance)}m` : '';
+          const shortText = dist ? `${short} · ${dist}` : `${short}`;
+
+          return {
+            icon,
+            shortText,
+            full: step.instruction,
+            distance: step.distance,
+            type: step.type,
+            coordinate: {
+              latitude: coords[step.way_points[0]]?.latitude || start.latitude,
+              longitude: coords[step.way_points[0]]?.longitude || start.longitude,
+            }
+          };
+        };
+
         const instructions = properties.steps.map((step, index) => ({
           id: index,
-          instruction: step.instruction,
-          distance: step.distance,
-          type: step.type,
-          coordinate: {
-            latitude: coordinates[step.way_points[0]]?.latitude || start.latitude,
-            longitude: coordinates[step.way_points[0]]?.longitude || start.longitude,
-          }
+          ...simplifyStep(step, coordinates)
         }));
-        
+
         setRouteCoordinates(coordinates);
         setRouteInfo({ distance, duration });
         setNavigationInstructions(instructions);
-        
+
         if (mapRef.current) {
           mapRef.current.fitToCoordinates(coordinates, {
             edgePadding: { top: 100, right: 50, bottom: 200, left: 50 },
@@ -179,9 +238,9 @@ function MapComponent() {
           });
         }
       }
-    } catch (error) {
+    } catch (err) {
       Alert.alert('Erreur', 'Impossible de calculer l\'itinéraire');
-      console.error('Erreur ORS:', error);
+      console.error('Erreur ORS:', err);
     } finally {
       setIsLoading(false);
     }
@@ -521,7 +580,7 @@ function MapComponent() {
               )}
               {isNavigating && (
                 <TouchableOpacity style={styles.stopNavButton} onPress={stopNavigation}>
-                  <Text style={styles.stopNavButtonText}>⏹️ Arrêter</Text>
+                  <Text style={styles.stopNavButtonText}>✖ Arrêter</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -640,9 +699,10 @@ function MapComponent() {
             <Text style={styles.distanceText}>
               {getDistanceToCurrentInstruction()}
             </Text>
-            <Text style={styles.navigationInstructionText}>
-              {currentInstruction.instruction}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 12 }}>
+              <Ionicons name={currentInstruction.icon || 'navigate'} size={20} color="#2196F3" />
+              <Text style={[styles.navigationInstructionText, { marginLeft: 10 }]} numberOfLines={2} ellipsizeMode="tail">{currentInstruction.shortText}</Text>
+            </View>
           </View>
         </View>
       )}

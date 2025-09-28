@@ -357,7 +357,7 @@ function MapHome() {
         )}
 
         {/* Search bar déroulante */}
-        <View style={styles.searchContainer}>
+  <View style={styles.searchContainer}>
           <TouchableOpacity style={styles.searchBarToggle} onPress={toggleSearchBar}>
             <Ionicons name="search" size={20} color="#666" />
             <Text style={styles.searchBarText}>Rechercher une destination</Text>
@@ -394,7 +394,7 @@ function MapHome() {
         </View>
 
         {/* Bulles simples pour domicile et travail */}
-        <View style={styles.simpleBubbles}>
+  <View style={styles.simpleBubbles}>
           <TouchableOpacity 
             style={[styles.simpleBubble, homeAddress && styles.simpleBubbleActive]} 
             onPress={homeAddress ? goHome : setAsHome}
