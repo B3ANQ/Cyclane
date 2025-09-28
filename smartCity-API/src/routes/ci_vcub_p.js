@@ -1,4 +1,5 @@
 // Station Le Vélo en temps réel
+// /api/vcub
 
 const express = require('express');
 const axios = require('axios');
@@ -23,10 +24,13 @@ router.get('/', async (req, res) => {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000 // 15 secondes de timeout
+      timeout: 15000, // 15 secondes de timeout
+      responseType: 'arraybuffer' // Pour contrôler l'encodage
     });
 
-    console.log('Réponse reçue, taille:', response.data.length); // Pour debug
+    // Conversion explicite en UTF-8
+    const xmlData = Buffer.from(response.data).toString('utf8');
+    console.log('Réponse reçue, taille:', xmlData.length); // Pour debug
 
     // Conversion XML vers JSON
     const parser = new xml2js.Parser({
@@ -35,7 +39,7 @@ router.get('/', async (req, res) => {
       mergeAttrs: true
     });
 
-    const result = await parser.parseStringPromise(response.data);
+    const result = await parser.parseStringPromise(xmlData);
     
     // Debug: afficher la structure
     console.log('Structure parsée:', Object.keys(result));
@@ -56,7 +60,7 @@ router.get('/', async (req, res) => {
       stations = features.map(feature => {
         const station = feature['bm:CI_VCUB_P'] || {};
         
-        console.log('Station keys:', Object.keys(station)); // Pour debug
+        //console.log('Station keys:', Object.keys(station)); // Pour debug
         
         // Extraction des coordonnées depuis la géométrie
         let coordonnees = { longitude: null, latitude: null };
