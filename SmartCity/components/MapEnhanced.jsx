@@ -130,21 +130,21 @@ function MapEnhanced() {
   const SIGNAL_TYPES = {
     BLOCKED_ROAD: {
       id: 'blocked_road',
-      title: '🚧 Route bloquée',
+      title: 'Route bloquée',
       icon: 'warning',
       color: '#FF5722',
       backgroundColor: '#FFEBEE'
     },
     DEGRADED_PATH: {
       id: 'degraded_path',
-      title: '⚠️ Piste dégradée',
+      title: 'Piste dégradée',
       icon: 'alert-circle',
       color: '#FF9800',
       backgroundColor: '#FFF3E0'
     },
     BIKE_OBSTRUCTION: {
       id: 'bike_obstruction',
-      title: '🚲 Voie cyclable obstruée',
+      title: 'Voie cyclable obstruée',
       icon: 'bicycle',
       color: '#F44336',
       backgroundColor: '#FFEBEE'
