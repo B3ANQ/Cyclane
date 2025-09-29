@@ -50,12 +50,10 @@ const SplashScreen = ({ onFinish }) => {
         end={{ x: 1, y: 1 }}
       />
       
-      {/* Cercles décoratifs */}
       <View style={[styles.circle, styles.circle1]} />
       <View style={[styles.circle, styles.circle2]} />
       <View style={[styles.circle, styles.circle3]} />
       
-      {/* Logo avec animation */}
       <Animated.View
         style={[
           styles.logoContainer,
