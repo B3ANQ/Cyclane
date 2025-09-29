@@ -1132,7 +1132,7 @@ function MapEnhanced() {
                 borderRadius: 20,
                 padding: 8,
                 borderWidth: 2,
-                borderColor: 'white',
+                borderColor: '#FAFDF3',
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 2 },
                 shadowOpacity: 0.2,
@@ -1213,7 +1213,7 @@ function MapEnhanced() {
               <TouchableOpacity
                 style={[
                   styles.searchBarToggle,
-                  isSearchExpanded && { backgroundColor: '#E8F5E8', borderColor: '#1A8D5B', borderWidth: 1 }
+                  isSearchExpanded && { backgroundColor: '#FAFDF3', borderColor: '#1A8D5B', borderWidth: 1 }
                 ]}
                 onPress={toggleSearchBar}
                 activeOpacity={0.8}
@@ -1248,27 +1248,27 @@ function MapEnhanced() {
                 transform: [{ scaleY: isSearchExpanded ? 1 : 0.95 }],
                 transition: 'opacity 0.2s, transform 0.2s',
               }}>
-                  {/* Inline inputs: Start and Destination */}
-                  <View style={{ padding: 8 }}>
-                    <View style={{ marginBottom: 8 }}>
-                      <Text style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Départ</Text>
-                      {!isStartEditing ? (
-                        <TouchableOpacity
-                          style={[styles.searchInput, { marginBottom: 6, flexDirection: 'row', alignItems: 'center' }]}
-                          onPress={() => setIsStartEditing(true)}
-                        >
-                          <Ionicons name="person" size={18} color="#1A8D5B" style={{ marginRight: 8 }} />
-                          <Text style={{ color: startQuery ? '#000' : '#666' }}>
-                            {startQuery ? startQuery : (startPoint || userLocation ? 'Ma position' : 'Tapez pour définir')}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : (
-                        <TextInput
-                          style={[styles.searchInput, { marginBottom: 6 }]}
-                          placeholder={startPoint ? 'Départ défini (tape pour modifier)' : 'Entrez le départ'}
-                          value={startQuery}
-                          onBlur={() => setIsStartEditing(false)}
-                          onChangeText={(text) => {
+                {/* Inline inputs: Start and Destination */}
+                            <View style={{ padding: 8, backgroundColor: '#FAFDF3' }}>
+                            <View style={{ marginBottom: 8 }}>
+                              <Text style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Départ</Text>
+                              {!isStartEditing ? (
+                              <TouchableOpacity
+                                style={[styles.searchInput, { marginBottom: 6, flexDirection: 'row', alignItems: 'center' }]}
+                                onPress={() => setIsStartEditing(true)}
+                              >
+                                <Ionicons name="person" size={18} color="#1A8D5B" style={{ marginRight: 8 }} />
+                                <Text style={{ color: startQuery ? '#000' : '#666' }}>
+                                {startQuery ? startQuery : (startPoint || userLocation ? 'Ma position' : 'Tapez pour définir')}
+                                </Text>
+                              </TouchableOpacity>
+                              ) : (
+                              <TextInput
+                                style={[styles.searchInput, { marginBottom: 6 }]}
+                                placeholder={startPoint ? 'Départ défini (tape pour modifier)' : 'Entrez le départ'}
+                                value={startQuery}
+                                onBlur={() => setIsStartEditing(false)}
+                                onChangeText={(text) => {
                             setStartQuery(text);
                             // debounce
                             if (startTimerRef.current) clearTimeout(startTimerRef.current);
@@ -1575,7 +1575,7 @@ function MapEnhanced() {
           }}>
             <TouchableWithoutFeedback onPress={() => {}}>
               <View style={{
-                backgroundColor: 'white',
+                backgroundColor: '#FAFDF3',
                 borderRadius: 18,
                 padding: 28,
                 width: '85%',
@@ -1652,8 +1652,8 @@ function MapEnhanced() {
                   }}
                 >
                   <View style={styles.signalTypeContent}>
-                    <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}> 
-                      <Ionicons name={signalType.icon} size={24} color="white" />
+                    <View style={[styles.signalTypeIcon, { backgroundColor: signalType.color }]}>
+                      <Ionicons name={signalType.icon} size={24} color="#FAFDF3" />
                     </View>
                     <Text style={styles.signalTypeText}>{signalType.title}</Text>
                   </View>
@@ -1676,7 +1676,7 @@ function MapEnhanced() {
         <TouchableWithoutFeedback onPress={() => setShowStepsModal(false)}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
             <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={{ backgroundColor: 'white', width: '86%', maxHeight: height * 0.7, borderRadius: 14, padding: 16 }}>
+              <View style={{ backgroundColor: '#FAFDF3', width: '86%', maxHeight: height * 0.7, borderRadius: 14, padding: 16 }}>
                 <Text style={{ fontWeight: '700', fontSize: 16, marginBottom: 12 }}>Étapes</Text>
                 <ScrollView>
                   {navigationInstructions.map(inst => (
@@ -1758,7 +1758,7 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     height: 10,
-    backgroundColor: '#E6F4EA',
+    backgroundColor: '#FAFDF3',
     borderRadius: 8,
     marginTop: 8,
     overflow: 'hidden',
@@ -1837,7 +1837,7 @@ const styles = StyleSheet.create({
   },
   // New experimental navigation layout
   newNavContainer: {
-    backgroundColor: 'rgba(255,255,255,0.98)',
+    backgroundColor: '#FAFDF3',
     padding: 12,
     borderRadius: 16,
     alignItems: 'center',
@@ -1910,7 +1910,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: 'white',
     borderWidth: 1,
-    borderColor: '#EAEAEA',
+    borderColor: '#FDEDFD',
   },
   controlButtonText: {
     marginLeft: 8,
@@ -2053,7 +2053,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   simpleBubble: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FAFDF3',
     padding: 14,
     borderRadius: 46,
     marginHorizontal: 12,
@@ -2080,7 +2080,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 30,
     left: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FAFDF3',
     padding: 14,
     borderRadius: 44,
     alignItems: 'center',
@@ -2131,7 +2131,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'white',
+    backgroundColor: '#FAFDF3',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -2200,7 +2200,7 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 20,
     right: 20,
-    backgroundColor: 'white',
+    backgroundColor: '#FAFDF3',
     borderRadius: 12,
     padding: 16,
     shadowColor: '#000',
@@ -2229,7 +2229,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   loading: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FAFDF3',
     padding: 16,
     borderRadius: 14,
     alignItems: 'center',
@@ -2354,7 +2354,7 @@ const styles = StyleSheet.create({
   // Route summary compact
   routeSummary: {
     marginTop: 12,
-    backgroundColor: 'white',
+    backgroundColor: '#FAFDF3',
     borderRadius: 14,
     padding: 12,
     flexDirection: 'row',
@@ -2398,7 +2398,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
   },
-  // removed routeCloseButton (replaced by routeRemoveButton)
 
   servicesLoading: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -2445,7 +2444,7 @@ const styles = StyleSheet.create({
   signalBubble: {
     position: 'absolute',
     right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FAFDF3',
     padding: 15,
     borderRadius: 50,
     alignItems: 'center',
@@ -2468,7 +2467,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   signalModalContent: {
-    backgroundColor: 'white',
+    backgroundColor: '#FAFDF3',
     borderRadius: 18,
     padding: 28,
     width: '85%',
@@ -2493,7 +2492,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomColor: '#FAFDF3',
   },
   signalModalTitle: {
     fontSize: 20,
