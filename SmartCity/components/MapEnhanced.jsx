@@ -40,10 +40,8 @@ const BORDEAUX_REGION = {
   longitudeDelta: 0.05,
 };
 
-// Clé API OpenRouteService
 const ORS_API_KEY = process.env.EXPO_PUBLIC_ORS_API_KEY || process.env.ORS_API_KEY;
 
-// Fonction pour créer le marqueur de service selon le mobilier
 const createServiceMarker = (service) => {
   const hasPump = service.mobilier.includes('POMPE');
   const hasTotem = service.mobilier.includes('TOTEM_REPARATION');
@@ -69,7 +67,6 @@ const createServiceMarker = (service) => {
     );
   }
 
-  // Fallback
   return (
     <View style={styles.serviceMarkerContainer}>
       <Ionicons name="bicycle" size={20} color="#888" />
@@ -105,7 +102,6 @@ function MapEnhanced() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  // Inline start/end search states (Option B)
   const [startQuery, setStartQuery] = useState('');
   const [endQuery, setEndQuery] = useState('');
   const [startResults, setStartResults] = useState([]);
@@ -119,17 +115,14 @@ function MapEnhanced() {
   const [locationPermission, setLocationPermission] = useState(false);
   const mapRef = useRef(null);
 
-  // Adresses prédéfinies
   const [homeAddress, setHomeAddress] = useState(null);
   const [workAddress, setWorkAddress] = useState(null);
 
-  // États pour la navigation
   const [navigationInstructions, setNavigationInstructions] = useState([]);
   const [currentInstruction, setCurrentInstruction] = useState(null);
   const [isNavigating, setIsNavigating] = useState(false);
   const [showStepsModal, setShowStepsModal] = useState(false);
 
-  // Nouveaux états pour les services vélo
   const [bikeServices, setBikeServices] = useState([]);
   const [isLoadingServices, setIsLoadingServices] = useState(false);
   const [arceaux, setArceaux] = useState([]);
@@ -147,14 +140,11 @@ function MapEnhanced() {
     veloStations: false,
   });
 
-  // Nouvel état pour le signalement d'incidents
   const [showSignalModal, setShowSignalModal] = useState(false);
-  // Toast notification for transient messages (e.g., signalement envoyé)
   const [toastMessage, setToastMessage] = useState('');
   const [showToast, setShowToast] = useState(false);
   const toastTimerRef = useRef(null);
 
-  // Types de signalement
   const SIGNAL_TYPES = {
     BLOCKED_ROAD: {
       id: 'blocked_road',
@@ -179,7 +169,6 @@ function MapEnhanced() {
     }
   };
 
-  // Nouveaux états pour les signalements
   const [signalements, setSignalements] = useState([]);
   const [isLoadingSignalements, setIsLoadingSignalements] = useState(false);
 
@@ -193,8 +182,6 @@ function MapEnhanced() {
     }, duration);
   };
 
-  // fonts removed — using default system fonts for now
-
   useEffect(() => {
     requestLocationPermission();
     loadBikeServices();
@@ -204,7 +191,6 @@ function MapEnhanced() {
     fetchSignalements();
   }, []);
 
-  // Demander les permissions et obtenir la localisation
   const requestLocationPermission = async () => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -223,7 +209,6 @@ function MapEnhanced() {
     }
   };
 
-  // Obtenir la localisation de l'utilisateur
   const getUserLocation = async () => {
     try {
       const location = await Location.getCurrentPositionAsync({
@@ -237,12 +222,11 @@ function MapEnhanced() {
 
       setUserLocation(userCoords);
 
-      // Par défaut, utiliser la position utilisateur comme départ si aucun départ défini
       if (!startPoint) {
         setStartPoint(userCoords);
         setStartQuery('Ma position');
       }
-      // Centrer la carte sur l'utilisateur
+
       if (mapRef.current) {
         mapRef.current.animateToRegion({
           ...userCoords,
@@ -256,7 +240,6 @@ function MapEnhanced() {
     }
   };
 
-  // Fonction de recherche d'adresses
   const searchAddress = async (query) => {
     if (!query.trim()) return;
 
@@ -290,7 +273,6 @@ function MapEnhanced() {
     }
   };
 
-  // Sélectionner une adresse depuis la recherche
   const selectAddress = (result) => {
     if (searchType === 'start') {
       setStartPoint(result.coordinates);
@@ -298,17 +280,16 @@ function MapEnhanced() {
       setEndPoint(result.coordinates);
     } else if (searchType === 'home') {
       setHomeAddress(result.coordinates);
-      Alert.alert('✅ Domicile enregistré', 'Votre adresse de domicile a été sauvegardée');
+      Alert.alert('Domicile enregistré', 'Votre adresse de domicile a été sauvegardée');
     } else if (searchType === 'work') {
       setWorkAddress(result.coordinates);
-      Alert.alert('✅ Travail enregistré', 'Votre adresse de travail a été sauvegardée');
+      Alert.alert('Travail enregistré', 'Votre adresse de travail a été sauvegardée');
     }
 
     setShowSearchModal(false);
     setSearchQuery('');
     setSearchResults([]);
 
-    // Si on a les deux points, calculer l'itinéraire et fermer la search bar
     if (searchType === 'end' && startPoint) {
       getRoute(startPoint, result.coordinates);
       setIsSearchExpanded(false);
@@ -318,7 +299,6 @@ function MapEnhanced() {
     }
   };
 
-  // Fonction pour calculer la distance entre deux points (en mètres)
   function distanceMeters(lat1, lon1, lat2, lon2) {
     const R = 6371e3;
     const φ1 = lat1 * Math.PI / 180;
@@ -332,7 +312,6 @@ function MapEnhanced() {
     return R * c;
   }
 
-  // Fonction de clustering des arceaux
   function clusterArceaux(arceaux, rayon = 10) {
     const clusters = [];
     for (const arceau of arceaux) {
@@ -343,10 +322,8 @@ function MapEnhanced() {
           cluster.latitude, cluster.longitude
         );
         if (d < rayon) {
-          // Ajoute au cluster existant
           cluster.ids.push(arceau.id);
           cluster.count += arceau.nombre || 1;
-          // Moyenne pondérée pour la position
           cluster.latitude = (cluster.latitude * (cluster.count - (arceau.nombre || 1)) + arceau.wgs84Coords.latitude * (arceau.nombre || 1)) / cluster.count;
           cluster.longitude = (cluster.longitude * (cluster.count - (arceau.nombre || 1)) + arceau.wgs84Coords.longitude * (arceau.nombre || 1)) / cluster.count;
           found = true;
@@ -365,10 +342,9 @@ function MapEnhanced() {
     return clusters;
   }
 
-  // Fonction pour créer un polygone circulaire (boucle fermée)
   const createCircularPolygon = (lat, lng, radiusMeters, points = 12) => {
     const coords = [];
-    const earthRadius = 6371000; // Rayon de la Terre en mètres
+    const earthRadius = 6371000;
 
     for (let i = 0; i < points; i++) {
       const angle = (i * 360 / points) * Math.PI / 180;
@@ -376,33 +352,30 @@ function MapEnhanced() {
       const deltaLng = radiusMeters * Math.sin(angle) / (earthRadius * Math.cos(lat * Math.PI / 180));
       const pointLat = lat + deltaLat * 180 / Math.PI;
       const pointLng = lng + deltaLng * 180 / Math.PI;
-      coords.push([pointLng, pointLat]); // [lon, lat]
+      coords.push([pointLng, pointLat]);
     }
-    // Boucle fermée
     if (coords.length > 0) {
       coords.push(coords[0]);
     }
     return coords;
   };
 
-  // Fonction pour créer des polygones d'évitement autour des signalements
   const createAvoidPolygons = (signalements) => {
     const polygons = [];
     signalements
       .filter(s => s.status === 'actif')
       .forEach(signalement => {
-        const radius = 20; // 20m
+        const radius = 20;
         const polygon = createCircularPolygon(
           signalement.latitude,
           signalement.longitude,
           radius
         );
-        polygons.push([polygon]); // Format MultiPolygon
+        polygons.push([polygon]);
       });
     return polygons;
   };
 
-  // Calculer l'itinéraire avec instructions de navigation et évitement des signalements
   const getRoute = async (start, end) => {
     setIsLoading(true);
     try {
@@ -415,7 +388,6 @@ function MapEnhanced() {
 
       const avoidPolygons = createAvoidPolygons(signalements);
 
-      // Use POST to avoid excessively long GET URLs when options are large
       const bodyPayload = {
         coordinates: [
           [start.longitude, start.latitude],
@@ -452,7 +424,6 @@ function MapEnhanced() {
       }
 
       if (!response.ok) {
-        // Extract server message without throwing
         let text = await response.text();
         try {
           const parsed = JSON.parse(text);
@@ -478,8 +449,6 @@ function MapEnhanced() {
         const distance = (properties.distance / 1000).toFixed(1);
         const duration = Math.round(properties.duration / 60);
 
-        // Extraire les instructions de navigation
-        // Simplify instructions for compact display while riding
         const simplifyStep = (step, coords) => {
           const text = (step.instruction || '').toLowerCase();
           let icon = 'navigate';
@@ -493,16 +462,14 @@ function MapEnhanced() {
             short = 'Gauche';
           } else if (text.includes('rond') || text.includes('roundabout')) {
             icon = 'sync';
-            // try to extract exit number from the instruction (French/English variants)
             let exitNum = null;
-            const exitRegex1 = /(?:sortie|exit)\s*(?:n(?:°|o)?\s*)?(\d+)/i; // 'sortie 2' or 'exit 2'
-            const exitRegex2 = /take the\s*(\d+)(?:st|nd|rd|th)?\s*exit/i; // 'take the 2nd exit'
+            const exitRegex1 = /(?:sortie|exit)\s*(?:n(?:°|o)?\s*)?(\d+)/i;
+            const exitRegex2 = /take the\s*(\d+)(?:st|nd|rd|th)?\s*exit/i;
             const m1 = step.instruction && step.instruction.match(exitRegex1);
             const m2 = step.instruction && step.instruction.match(exitRegex2);
             if (m1 && m1[1]) exitNum = m1[1];
             else if (m2 && m2[1]) exitNum = m2[1];
             if (exitNum) {
-              // French ordinal formatting
               const n = parseInt(exitNum, 10);
               const ordinal = (n === 1) ? '1ère' : `${n}ème`;
               short = `Rond-point ${ordinal} sortie`;
@@ -521,7 +488,6 @@ function MapEnhanced() {
           }
 
           const dist = step.distance ? `${Math.round(step.distance)}m` : '';
-          // For glanceable info we avoid street names; for roundabouts we show exit number if available
           const shortText = dist ? `${short} · ${dist}` : `${short}`;
 
           return {
@@ -561,22 +527,19 @@ function MapEnhanced() {
     }
   };
 
-  // Démarrer la navigation
   const startNavigation = () => {
   if (navigationInstructions.length > 0) {
     setIsNavigating(true);
     setCurrentInstruction(navigationInstructions[0]);
-    recenterToUser(); // Ajout : recentre la carte sur l'utilisateur
+    recenterToUser();
   }
 };
 
-  // Arrêter la navigation
   const stopNavigation = () => {
     setIsNavigating(false);
     setCurrentInstruction(null);
   };
 
-  // Surveiller la position pendant la navigation
   useEffect(() => {
     let locationSubscription;
 
@@ -609,7 +572,6 @@ function MapEnhanced() {
     };
   }, [isNavigating, locationPermission, navigationInstructions]);
 
-  // Mettre à jour l'instruction courante
   const updateCurrentInstruction = (userPos) => {
     if (!currentInstruction || navigationInstructions.length === 0) return;
 
@@ -620,20 +582,17 @@ function MapEnhanced() {
       currentInstruction.coordinate.longitude
     );
 
-    // Passer à l'instruction suivante si on est proche (25m)
     if (distanceToInstruction < 25) {
       const currentIndex = navigationInstructions.findIndex(inst => inst.id === currentInstruction.id);
       if (currentIndex < navigationInstructions.length - 1) {
         setCurrentInstruction(navigationInstructions[currentIndex + 1]);
       } else {
-        // Arrivée
         stopNavigation();
-        Alert.alert('🎉 Félicitations !', 'Vous êtes arrivé à destination !');
+        Alert.alert('Félicitations !', 'Vous êtes arrivé à destination !');
       }
     }
   };
 
-  // Helpers for navigation UI
   const getCurrentInstructionIndex = () => {
     if (!currentInstruction) return -1;
     return navigationInstructions.findIndex(inst => inst.id === currentInstruction.id);
@@ -651,7 +610,6 @@ function MapEnhanced() {
     }
   };
 
-  // Calculer la distance jusqu'à la prochaine instruction
   const getDistanceToCurrentInstruction = () => {
     if (!currentInstruction || !userLocation) return null;
 
@@ -671,14 +629,13 @@ function MapEnhanced() {
     }
   };
 
-  // Définir l'adresse de la maison
   const setAsHome = () => {
     if (!homeAddress) {
       setSearchType('home');
       setShowSearchModal(true);
     } else {
       Alert.alert(
-        '🏠 Redéfinir le domicile ?',
+        'Redéfinir le domicile ?',
         'Voulez-vous changer votre adresse de domicile ?',
         [
           { text: 'Annuler', style: 'cancel' },
@@ -694,14 +651,13 @@ function MapEnhanced() {
     }
   };
 
-  // Définir l'adresse du travail
   const setAsWork = () => {
     if (!workAddress) {
       setSearchType('work');
       setShowSearchModal(true);
     } else {
       Alert.alert(
-        '💼 Redéfinir le travail ?',
+        'Redéfinir le travail ?',
         'Voulez-vous changer votre adresse de travail ?',
         [
           { text: 'Annuler', style: 'cancel' },
@@ -717,10 +673,9 @@ function MapEnhanced() {
     }
   };
 
-  // Aller à la maison
   const goHome = () => {
     if (!homeAddress) {
-      Alert.alert('❌', 'Aucune adresse de maison enregistrée');
+      Alert.alert('Attention', 'Aucune adresse de maison enregistrée');
       return;
     }
 
@@ -730,10 +685,9 @@ function MapEnhanced() {
     getRoute(start, homeAddress);
   };
 
-  // Aller au travail
   const goToWork = () => {
     if (!workAddress) {
-      Alert.alert('❌', 'Aucune adresse de travail enregistrée');
+      Alert.alert('Attention', 'Aucune adresse de travail enregistrée');
       return;
     }
 
@@ -751,7 +705,6 @@ function MapEnhanced() {
     setNavigationInstructions([]);
     stopNavigation();
 
-    // Recentrer la carte sur l'utilisateur
     if (userLocation && mapRef.current) {
       mapRef.current.animateToRegion({
         ...userLocation,
@@ -761,7 +714,6 @@ function MapEnhanced() {
     }
   };
 
-  // Supprimer uniquement l'itinéraire (ne touche pas au point de départ)
   const clearRoute = () => {
     setEndPoint(null);
     setRouteCoordinates([]);
@@ -784,30 +736,25 @@ function MapEnhanced() {
     }
   };
 
-  // Gestion du clic sur la carte avec prise en compte des signalements
   const handleMapPress = (event) => {
     const coordinate = event.nativeEvent.coordinate;
 
-    // Vérifier que la localisation utilisateur est disponible
     if (!userLocation) {
       Alert.alert('Erreur', 'Position utilisateur non disponible');
       return;
     }
 
-    // Définir automatiquement le point de départ et d'arrivée
     setStartPoint(userLocation);
     setEndPoint(coordinate);
     
-    // Calculer l'itinéraire en évitant les signalements
     getRoute(userLocation, coordinate);
   };
 
-  // Fonction pour charger les services vélo
   const loadBikeServices = async () => {
     setIsLoadingServices(true);
     try {
       const apiUrl = process.env.EXPO_PUBLIC_SMARTCITY_API_URL || 'http://10.0.2.2:3000';
-      console.log('🔍 Chargement des services depuis:', `${apiUrl}/api/services`);
+      console.log('Chargement des services depuis:', `${apiUrl}/api/services`);
 
       const response = await fetch(`${apiUrl}/api/services`, {
         method: 'GET',
@@ -821,10 +768,9 @@ function MapEnhanced() {
       }
 
       const data = await response.json();
-      console.log('✅ Services récupérés:', data.count, 'services');
+      console.log('Services récupérés:', data.count, 'services');
 
       if (data.success && data.data) {
-        // Convertir les coordonnées Lambert93 vers WGS84
         const servicesWithCoords = data.data.map(service => {
           const coords = lambert93ToWGS84(
             service.coordonnees.x,
@@ -837,28 +783,25 @@ function MapEnhanced() {
         });
 
         setBikeServices(servicesWithCoords);
-        console.log('🚲 Services avec coordonnées:', servicesWithCoords.length);
+        console.log('Services avec coordonnées:', servicesWithCoords.length);
       } else {
-        console.warn('⚠️ Réponse API invalide:', data);
+        console.warn('Réponse API invalide:', data);
       }
     } catch (error) {
-      console.error('❌ Erreur chargement services:', error);
+      console.error('Erreur chargement services:', error);
     } finally {
       setIsLoadingServices(false);
     }
   };
 
-  // Remplace la fonction lambert93ToWGS84 par cette version de test :
   const lambert93ToWGS84 = (x, y) => {
-    // Test : utiliser directement les valeurs comme coordonnées WGS84
-    // En inversant potentiellement lat/lon
+
     return {
-      latitude: 44.837789 + ((y - 4188250) * 0.000009), // Approximation pour Bordeaux
+      latitude: 44.837789 + ((y - 4188250) * 0.000009), 
       longitude: -0.57918 + ((x - 1417341) * 0.000009)
     };
   };
 
-  // Fonction pour charger les arceaux vélo
   const loadArceaux = async () => {
     setIsLoadingArceaux(true);
     try {
@@ -876,8 +819,7 @@ function MapEnhanced() {
             wgs84Coords: coords
           };
         });
-        // Cluster les arceaux
-        const clustered = clusterArceaux(arceauxWithCoords, 50); // 50 mètres
+        const clustered = clusterArceaux(arceauxWithCoords, 50);
         setArceaux(clustered);
       }
     } catch (error) {
@@ -887,7 +829,6 @@ function MapEnhanced() {
     }
   };
 
-  // Fonction pour charger les zones de free-floating
   const loadFreeFloatingZones = async () => {
     setIsLoadingFreeFloating(true);
     try {
@@ -904,7 +845,6 @@ function MapEnhanced() {
     }
   };
 
-  // Fonction pour charger les stations de vélo
   const loadVeloStations = async () => {
     setIsLoadingVeloStations(true);
     try {
@@ -931,7 +871,6 @@ function MapEnhanced() {
     }
   };
 
-  // Fonction pour charger les signalements
   const fetchSignalements = async () => {
     setIsLoadingSignalements(true);
     try {
@@ -972,9 +911,8 @@ function MapEnhanced() {
       const data = await response.json();
 
       if (response.ok && data.success) {
-        // Show a small transient notification instead of modal alert
         showTransientMessage('Signalement envoyé');
-        fetchSignalements(); // recharge la liste après ajout
+        fetchSignalements();
       } else {
         showTransientMessage(data.message || 'Erreur envoi signalement');
       }
@@ -984,16 +922,13 @@ function MapEnhanced() {
     }
   };
 
-  // Surveiller les changements de signalements pour recalculer l'itinéraire
   useEffect(() => {
-    // Si un itinéraire est actif et que les signalements changent, recalculer
     if (startPoint && endPoint && routeCoordinates.length > 0) {
-      console.log('🔄 Recalcul de l\'itinéraire avec nouveaux signalements');
+      console.log('Recalcul de l\'itinéraire avec nouveaux signalements');
       getRoute(startPoint, endPoint);
     }
-  }, [signalements]); // Dépendance sur les signalements
+  }, [signalements]); 
 
-  // Nombre de filtres actifs pour afficher badge sur la bulle 'options'
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
   const hasFilters = activeFilterCount > 0;
 
@@ -1014,7 +949,6 @@ function MapEnhanced() {
         followsUserLocation={isNavigating}
         showsCompass={true}
       >
-        {/* Marqueurs des services vélo */}
         {filters.bikeServices && bikeServices.map(service => (
           <Marker
             key={service.id}
@@ -1025,7 +959,6 @@ function MapEnhanced() {
           </Marker>
         ))}
 
-        {/* Marqueurs des arceaux vélo */}
         {filters.arceaux && arceaux.map((arceau, idx) => (
           <Marker
             key={arceau.ids ? arceau.ids.join('-') : idx}
@@ -1043,7 +976,6 @@ function MapEnhanced() {
           </Marker>
         ))}
 
-        {/* Marqueurs des zones freefloating */}
         {filters.freeFloating && freeFloatingZones.map(zone => (
           <Marker
             key={zone.gid}
@@ -1057,7 +989,6 @@ function MapEnhanced() {
           </Marker>
         ))}
 
-        {/* Marqueurs des stations Le Vélo TBM */}
         {filters.veloStations && veloStations.map(station => (
           <Marker
             key={station.id}
@@ -1070,7 +1001,6 @@ function MapEnhanced() {
         ))}
 
 
-        {/* Marqueur de départ */}
         {startPoint && (
           <Marker
             coordinate={startPoint}
@@ -1082,7 +1012,6 @@ function MapEnhanced() {
           </Marker>
         )}
 
-        {/* Marqueur d'arrivée */}
         {endPoint && (
           <Marker
             coordinate={endPoint}
@@ -1094,7 +1023,6 @@ function MapEnhanced() {
           </Marker>
         )}
 
-        {/* Tracé de l'itinéraire */}
         {routeCoordinates.length > 0 && (
           <Polyline
             coordinates={routeCoordinates}
@@ -1104,7 +1032,6 @@ function MapEnhanced() {
           />
         )}
 
-        {/* Marqueurs des signalements */}
         {signalements.map((signalement) => {
           let iconName = 'alert-circle';
           let iconColor = '#FF9800';
@@ -1146,7 +1073,6 @@ function MapEnhanced() {
           );
         })}
 
-        {/* Cercles d'évitement autour des signalements actifs (optionnel pour visualisation) */}
         {signalements
           .filter(s => s.status === 'actif')
           .map((signalement) => (
@@ -1165,35 +1091,28 @@ function MapEnhanced() {
         }
       </MapView>
 
-      {/* Interface utilisateur */}
       <View style={styles.overlay}>
-        {/* Header avec infos route - Affiché seulement si pas en navigation */}
 
-        {/* Header compact pendant la navigation - nouvelle disposition expérimentale */}
         {isNavigating && routeInfo && (
           <View style={styles.newNavContainer}>
-            {/* Large central bubble with icon */}
             <View style={styles.instructionBubbleWrapper}>
               <View style={styles.instructionBubble}>
                 <Ionicons name={currentInstruction?.icon || 'navigate'} size={30} color="white" />
               </View>
-              {/* Distance badge (small circle) */}
+
               <View style={styles.distanceBadge}>
                 <Text style={{ color: 'white', fontWeight: '700' }}>{getDistanceToCurrentInstruction() || ''}</Text>
               </View>
             </View>
 
-            {/* Main short instruction centered */}
             <Text style={styles.newInstructionText} numberOfLines={2} ellipsizeMode="tail">
               {currentInstruction ? currentInstruction.shortText : 'Suivre la route'}
             </Text>
 
-            {/* Progress bar (full-width thin) */}
             <View style={styles.newProgressBarBackground}>
               <View style={[styles.newProgressBarFill, { width: `${getNavigationProgress() * 100}%`}]} />
             </View>
 
-            {/* Controls row: Steps and Stop */}
             <View style={styles.newControlRow}>
               <TouchableOpacity style={styles.controlButton} onPress={() => setShowStepsModal(true)} accessibilityLabel="Voir les étapes">
                 <Ionicons name="list" size={20} color="#1A8D5B" />
@@ -1207,7 +1126,6 @@ function MapEnhanced() {
           </View>
         )}
 
-        {/* Search bar déroulante - Masquée pendant la navigation */}
         {!isNavigating && (
           <View style={styles.searchContainer}>
             <View style={styles.searchRow}>
@@ -1241,7 +1159,6 @@ function MapEnhanced() {
                 />
               </TouchableOpacity>
             </View>
-            {/* Animation de transition fluide */}
             {isSearchExpanded && (
               <View style={{
                 ...styles.expandedSearch,
@@ -1249,7 +1166,6 @@ function MapEnhanced() {
                 transform: [{ scaleY: isSearchExpanded ? 1 : 0.95 }],
                 transition: 'opacity 0.2s, transform 0.2s',
               }}>
-                {/* Inline inputs: Start and Destination */}
                             <View style={{ padding: 8, backgroundColor: '#FAFDF3' }}>
                             <View style={{ marginBottom: 8 }}>
                               <Text style={{ fontSize: 13, color: '#666', marginBottom: 6 }}>Départ</Text>
@@ -1354,7 +1270,6 @@ function MapEnhanced() {
                       ) : (
                         endResults.map(res => (
                           <TouchableOpacity key={res.id} style={styles.searchResultItem} onPress={() => {
-                            // select destination
                             const dest = res.coordinates;
                             Keyboard.dismiss();
                             setEndPoint(dest);
@@ -1376,7 +1291,6 @@ function MapEnhanced() {
                   </View>
               </View>
             )}
-            {/* Route summary — visible si on a calculé un itinéraire et pas encore en navigation */}
             {routeInfo && !isNavigating && (
               <View style={styles.routeSummary}>
                 <View style={styles.routeIconContainer}>
@@ -1435,7 +1349,6 @@ function MapEnhanced() {
         )}
       </View>
 
-      {/* Bottom control row: recenter, start, signalement - unified size and alignment */}
       <View style={styles.bottomControlsRow} pointerEvents="box-none">
         <TouchableOpacity style={styles.controlCircle} onPress={getUserLocation} accessibilityLabel="Recentrer la carte">
           <Ionicons name="locate" size={22} color="#1A8D5B" />
@@ -1453,9 +1366,7 @@ function MapEnhanced() {
           <Ionicons name="warning" size={22} color="#FF5722" />
         </TouchableOpacity>
       </View>
-      {/* floating stop removed - action moved into route summary */}
 
-      {/* Modal de recherche */}
       <Modal
         visible={showSearchModal}
         animationType="slide"
@@ -1471,10 +1382,10 @@ function MapEnhanced() {
               <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {searchType === 'start' ? '📍 Choisir le départ' :
-                  searchType === 'end' ? '🎯 Choisir l\'arrivée' :
-                    searchType === 'home' ? '🏠 Définir le domicile' :
-                      searchType === 'work' ? '💼 Définir le travail' : 'Rechercher'}
+                {searchType === 'start' ? 'Choisir le départ' :
+                  searchType === 'end' ? 'Choisir l\'arrivée' :
+                    searchType === 'home' ? 'Définir le domicile' :
+                      searchType === 'work' ? 'Définir le travail' : 'Rechercher'}
               </Text>
               <TouchableOpacity onPress={() => setShowSearchModal(false)}>
                 <Ionicons name="close" size={24} color="#666" />
@@ -1492,7 +1403,6 @@ function MapEnhanced() {
               autoFocus
             />
 
-            {/* Bouton pour utiliser ma position actuelle */}
             {userLocation && searchType === 'start' && (
               <TouchableOpacity
                 style={styles.currentLocationButton}
@@ -1528,7 +1438,6 @@ function MapEnhanced() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Détails de la station sélectionnée */}
       {selectedVeloStation && (
         <View style={{
           position: 'absolute',
@@ -1560,7 +1469,6 @@ function MapEnhanced() {
         </View>
       )}
 
-      {/* Modal de filtres */}
       <Modal
         visible={showFiltersModal}
         animationType="slide"
@@ -1624,7 +1532,6 @@ function MapEnhanced() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Modal de signalement */}
       <Modal
         visible={showSignalModal}
         transparent={true}
@@ -1633,17 +1540,15 @@ function MapEnhanced() {
       >
         <TouchableWithoutFeedback onPress={() => setShowSignalModal(false)}>
           <View style={styles.signalModalOverlay}>
-            <TouchableWithoutFeedback onPress={() => {}}>{/* prevent inner taps from closing */}
+            <TouchableWithoutFeedback onPress={() => {}}>
               <View style={styles.signalModalContent}>
                 <View style={styles.modalHandle} />
-                {/* no title or close button — tapping outside will dismiss */}
                 <ScrollView style={styles.signalTypesContainer}>
               {Object.values(SIGNAL_TYPES).map((signalType) => (
                 <TouchableOpacity
                   key={signalType.id}
                   style={[styles.signalTypeButton, { backgroundColor: signalType.backgroundColor }]}
                   onPress={() => {
-                    // Send report immediately from current user location
                     setShowSignalModal(false);
                     if (!userLocation) {
                       showTransientMessage('Position introuvable');
@@ -1667,7 +1572,6 @@ function MapEnhanced() {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Modal des étapes (itinéraire) */}
       <Modal
         visible={showStepsModal}
         transparent={true}
@@ -1685,7 +1589,6 @@ function MapEnhanced() {
                       <Ionicons name={inst.icon || 'navigate'} size={18} color="#1A8D5B" style={{ width: 26 }} />
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontWeight: inst.id === getCurrentInstructionIndex() ? '700' : '400' }}>{inst.shortText}</Text>
-                        {/* show full instruction in smaller text */}
                         <Text style={{ color: '#666', fontSize: 12 }}>{inst.full}</Text>
                       </View>
                     </View>
@@ -1701,7 +1604,6 @@ function MapEnhanced() {
       </Modal>
 
 
-      {/* Toast notification for transient messages */}
       {showToast && (
         <View style={styles.toastContainer} pointerEvents="none">
           <View style={styles.toastBox}>
@@ -1728,7 +1630,6 @@ const styles = StyleSheet.create({
     right: 15,
     zIndex: 1000,
   },
-  // logoRow and logoImage removed per user request
   header: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     padding: 14,
@@ -1740,7 +1641,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  // Header compact pendant la navigation
   compactHeader: {
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     padding: 10,
@@ -1836,7 +1736,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 18,
   },
-  // New experimental navigation layout
   newNavContainer: {
     backgroundColor: '#FAFDF3',
     padding: 12,
@@ -2072,7 +1971,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   simpleBubbleActive: {
-    // Only show a stroke when a saved place exists — keep white background and show green stroke
     backgroundColor: 'white',
     borderColor: '#1A8D5B',
     borderWidth: 2,
@@ -2195,7 +2093,6 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     fontSize: 13,
   },
-  // Carte de navigation flottante
   navigationCard: {
     position: 'absolute',
     bottom: 20,
@@ -2270,7 +2167,6 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
   },
-  // Styles du modal
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -2351,8 +2247,6 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-
-  // Route summary compact
   routeSummary: {
     marginTop: 12,
     backgroundColor: '#FAFDF3',
@@ -2565,7 +2459,7 @@ const styles = StyleSheet.create({
     transform: [{ translateY: -28 }],
   },
   toastBox: {
-    backgroundColor: 'rgba(26,141,91,0.92)', // green close to the app palette, slightly transparent
+    backgroundColor: 'rgba(26,141,91,0.92)',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 12,
