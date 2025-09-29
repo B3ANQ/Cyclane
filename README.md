@@ -1,121 +1,127 @@
-# SmartCity 🚴‍♂️
-
 <div align="center">
   <img src="SmartCity/assets/Logo_Light.svg" alt="SmartCity Logo" width="200"/>
   
   *Application mobile pour promouvoir la mobilité douce à Bordeaux*
+  
+  ![React Native](https://img.shields.io/badge/React_Native-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+  ![Expo](https://img.shields.io/badge/Expo-1B1F23?style=for-the-badge&logo=expo&logoColor=white)
 </div>
 
-## 📋 Présentation du Projet
+## À propos du projet
 
-**SmartCity** est une application mobile développée dans le cadre d'un projet d'école visant à encourager et faciliter l'usage du vélo dans la métropole bordelaise. L'application s'inscrit dans une démarche de mobilité durable et connectée, répondant aux enjeux environnementaux et urbains actuels.
+**Cyclane** est une application mobile développée pour encourager l'usage du vélo dans la métropole bordelaise. L'application offre des outils de navigation intelligents, de planification d'itinéraires et de localisation de services cyclables pour promouvoir une mobilité urbaine durable.
 
-### 🎯 Contexte
+### Problématiques adressées
 
-Bordeaux est une métropole en pleine croissance, où la mobilité douce est un enjeu majeur. La ville investit fortement dans les pistes cyclables et souhaite promouvoir l'usage du vélo comme alternative aux déplacements motorisés.
+- **Congestion urbaine** : Réduction du trafic automobile
+- **Impact environnemental** : Diminution de la pollution atmosphérique  
+- **Mobilité urbaine** : Alternative aux difficultés de stationnement en centre-ville
 
-### 🚨 Problématiques Identifiées
+### Fonctionnalités principales
 
-- **Congestion du trafic automobile** dans la métropole
-- **Pollution de l'air** en centre-ville
-- **Difficulté de stationnement** en centre-ville
+-  **Cartographie interactive** avec pistes cyclables intégrées
+-  **Planification d'itinéraires** optimisés pour cyclistes
+-  **Géolocalisation** des vélos en libre-service
+-  **Navigation temps réel** adaptée aux infrastructures cyclables
+-  **Suivi personnel** des trajets et statistiques
+-  **Interface moderne** avec design system cohérent
 
-### 🎯 Objectifs de l'Application
+##  Stack technique
 
-- ✅ **Encourager et faciliter** l'usage du vélo (propriétaire ou partagé)
-- 🗺️ **Optimiser les trajets** pour les cyclistes (sécurité, rapidité, confort)
-- 🌱 **Promouvoir** une mobilité durable et connectée
+### Core Framework
+```json
+{
+  "react-native": "0.81.4",
+  "expo": "~54.0.10",
+  "react": "19.1.0",
+  "typescript": "~5.9.2"
+}
+```
 
-### 👥 Public Cible
+### Bibliothèques principales
 
-- 💼 **Travailleurs** se déplaçant en métropole
-- 🎓 **Étudiants et jeunes actifs**
-- 🏠 **Habitants** de Bordeaux et sa métropole
+| Domaine | Technologie | Version | Usage |
+|---------|-------------|---------|-------|
+| **Maps & Navigation** | `react-native-maps` | 1.20.1 | Cartographie interactive |
+| **Graphics** | `react-native-svg` | ^15.13.0 | Graphiques vectoriels |
+| **UI/UX** | `expo-linear-gradient` | ^15.0.7 | Dégradés d'interface |
+| **Typography** | `expo-font` | ^14.0.8 | Polices personnalisées |
 
-## 🛠️ Technologies Utilisées
+### Outils de développement
+- **Expo CLI** - Environnement de développement intégré
+- **TypeScript** - Typage statique et IntelliSense
+- **Metro Bundler** - Bundler JavaScript pour React Native
 
-### Framework et Environnement
-- **React Native** (v0.81.4) - Framework de développement mobile cross-platform
-- **Expo** (~54.0.10) - Plateforme de développement React Native
-- **TypeScript** (~5.9.2) - Langage de programmation typé
+##  Design System
 
-### Bibliothèques Principales
-- **React** (19.1.0) - Bibliothèque JavaScript pour les interfaces utilisateur
-- **React Native Maps** (1.20.1) - Intégration de cartes interactives
-- **React Native SVG** (^15.13.0) - Support des graphiques vectoriels
-- **Expo Linear Gradient** (^15.0.7) - Dégradés pour l'interface
-- **Expo Font** (^14.0.8) - Gestion des polices personnalisées
+### Palette chromatique
+```css
+:root {
+  --primary: #1A8D5B;      /* Vert nature */
+  --background: #FAFDF3;    /* Blanc cassé naturel */
+  --accent-pink: #FDEDFD;   /* Rose pastel */
+  --accent-yellow: #FEF7C2; /* Jaune doux */
+}
+```
 
-### Outils de Développement
-- **Expo CLI** - Interface en ligne de commande pour le développement
-- **TypeScript** - Typage statique pour une meilleure qualité de code
+##  Installation & Usage
 
-## 🎨 Direction Artistique
+### Prérequis système
+- **Node.js** ≥ 18.0.0
+- **npm** ou **yarn**
+- **Expo CLI** (global)
+- **Smartphone** avec Expo Go (développement)
 
-### Palette de Couleurs
-- **Couleur d'accentuation** : `#1A8D5B` (Vert nature)
-- **Arrière-plan** : `#FAFDF3` (Blanc cassé naturel)
-- **Rose** : `#FDEDFD` (Rose pastel)
-- **Jaune** : `#FEF7C2` (Jaune doux)
-
-### Typographie
-- **Police principale** : Barlow
-
-## 🚀 Installation et Lancement
-
-### Prérequis
-- Node.js (version 18 ou supérieure)
-- npm ou yarn
-- Expo CLI
-- Un smartphone avec l'application Expo Go (pour les tests)
-
-### Installation
+### Setup du projet
 ```bash
-# Cloner le repository
-git clone https://github.com/B3ANQ/SmartCity.git
-
-# Naviguer dans le dossier du projet
+# Clone du repository
+git clone git@github.com:B3ANQ/Cyclane.git
 cd SmartCity/SmartCity
 
-# Installer les dépendances
+# Installation des dépendances
 npm install
-```
 
-### Lancement
-```bash
-# Démarrer le serveur de développement
+# Démarrage du serveur de développement
 npm start
-
-# Ou pour des plateformes spécifiques :
-npm run android  # Pour Android
-npm run ios      # Pour iOS
-npm run web      # Pour le web
 ```
 
-## 📱 Fonctionnalités
+### Scripts disponibles
+```bash
+npm start          # Démarre Metro Bundler
+npm run android    # Build Android
+npm run ios        # Build iOS  
+npm run web        # Version web
+```
 
-- 🗺️ **Cartographie interactive** avec les pistes cyclables de Bordeaux
-- 🚴‍♂️ **Planification d'itinéraires** optimisés pour les cyclistes
-- 📍 **Localisation des vélos en libre-service**
-- 🛣️ **Navigation adaptée** aux infrastructures cyclables
-- 📊 **Statistiques personnelles** de déplacements
-- 🌟 **Interface intuitive** avec une direction artistique moderne
+##  Équipe de développement
 
-## 👨‍💻 Équipe de Développement
+| Rôle | Membre |
+|------|---------|
+| **UI/UX Designer** | Téo Jamin |
+| **Product Owner** | Thom Legros |
+| **Full Stack Developer** | Loan Lucmau |
+| **Full Stack Developer** | Victor Sanson |
 
-- **Téo Jamin** - Designer UI/UX
-- **Loan Lucmau** - Développeur Full Stack
-- **Thom Legros** - Product Owner
-- **Victor Sanson** - Développeur Full Stack
+##  Impact & Objectifs
 
-## 🌍 Impact Environnemental
+### Métriques ciblées
+-  **Réduction CO₂**
+-  **Adoption cycliste**
+-  **Trafic automobile**
 
-Ce projet s'inscrit dans une démarche de **développement durable** en :
-- Réduisant les émissions de CO₂ liées aux transports
-- Encourageant l'adoption de modes de transport écologiques
-- Contribuant à la désengorgement du trafic urbain
-- Améliorant la qualité de l'air en centre-ville
+### Public cible
+- **Professionnels** en déplacement métropolitain
+- **Étudiants** et jeunes actifs (18-35 ans)
+- **Résidents** de Bordeaux Métropole
+
+##  Licence
+
+Ce projet est développé dans le cadre académique d'Epitech Digital School.
+
+---
 
 <div align="center">
-  <strong>SmartCity - Pour une mobilité plus verte à Bordeaux 🌱</strong>
+  <strong>SmartCity - Pour une mobilité plus verte à Bordeaux</strong>
+  
+  [Documentation](docs/) • [Issues](issues/) • [Releases](releases/)
 </div>
