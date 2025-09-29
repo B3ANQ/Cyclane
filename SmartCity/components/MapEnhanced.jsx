@@ -563,11 +563,12 @@ function MapEnhanced() {
 
   // Démarrer la navigation
   const startNavigation = () => {
-    if (navigationInstructions.length > 0) {
-      setIsNavigating(true);
-      setCurrentInstruction(navigationInstructions[0]);
-    }
-  };
+  if (navigationInstructions.length > 0) {
+    setIsNavigating(true);
+    setCurrentInstruction(navigationInstructions[0]);
+    recenterToUser(); // Ajout : recentre la carte sur l'utilisateur
+  }
+};
 
   // Arrêter la navigation
   const stopNavigation = () => {
@@ -646,7 +647,7 @@ function MapEnhanced() {
 
   const recenterToUser = () => {
     if (userLocation && mapRef.current) {
-      mapRef.current.animateToRegion({ ...userLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
+      mapRef.current.animateToRegion({ ...userLocation, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 500);
     }
   };
 
