@@ -9,7 +9,7 @@ const router = express.Router();
 // Route par défaut
 router.get('/', getAllFreefloatingZones);
 
-// Route pour récupérer toutes les zones (compatibilité)
+// Route pour récupérer toutes les zones 
 router.get('/zones', getAllFreefloatingZones);
 
 module.exports = router;

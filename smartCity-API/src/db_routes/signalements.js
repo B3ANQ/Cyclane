@@ -11,12 +11,10 @@ router.get('/', async (req, res) => {
   try {
     const { status, type, limit, offset } = req.query;
     
-    // Construction du filtre
     const where = {};
     if (status) where.status = status;
     if (type) where.type = type;
     
-    // Paramètres de pagination
     const take = limit ? parseInt(limit) : undefined;
     const skip = offset ? parseInt(offset) : undefined;
     
@@ -29,7 +27,6 @@ router.get('/', async (req, res) => {
       }
     });
     
-    // Compter le total pour la pagination
     const total = await prisma.report.count({ where });
     
     res.json({
@@ -40,7 +37,7 @@ router.get('/', async (req, res) => {
       data: signalements
     });
     
-    console.log(`✅ ${signalements.length} signalements récupérés avec succès`);
+    console.log(`${signalements.length} signalements récupérés avec succès`);
     
   } catch (error) {
     console.error('Erreur lors de la récupération des signalements:', error.message);
@@ -54,7 +51,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Route de test de connexion (DOIT ÊTRE AVANT /:id)
+// Route de test de connexion
 router.get('/test-connection', async (req, res) => {
   try {
     await prisma.$connect();
@@ -68,7 +65,7 @@ router.get('/test-connection', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    console.log('✅ Connexion MongoDB testée avec succès');
+    console.log('Connexion MongoDB testée avec succès');
     
   } catch (error) {
     console.error('❌ Erreur de connexion MongoDB:', error);
@@ -82,7 +79,7 @@ router.get('/test-connection', async (req, res) => {
   }
 });
 
-// GET - Récupérer les signalements dans une zone géographique (AVANT /:id aussi)
+// GET - Récupérer les signalements dans une zone géographique
 router.get('/zone/:lat/:lng/:radius', async (req, res) => {
   try {
     const { lat, lng, radius } = req.params;
@@ -98,8 +95,6 @@ router.get('/zone/:lat/:lng/:radius', async (req, res) => {
       });
     }
     
-    // Approximation simple pour calculer les limites (pour un calcul plus précis, 
-    // il faudrait utiliser une fonction géospatiale plus avancée)
     const latDelta = radiusKm / 111; // 1 degré lat ≈ 111km
     const lngDelta = radiusKm / (111 * Math.cos(latitude * Math.PI / 180));
     
@@ -119,7 +114,7 @@ router.get('/zone/:lat/:lng/:radius', async (req, res) => {
       }
     });
     
-    // Filtrer par distance exacte (optionnel, pour plus de précision)
+
     const signalementsFiltrés = signalements.filter(s => {
       const distance = Math.sqrt(
         Math.pow((s.latitude - latitude) * 111, 2) + 
@@ -148,7 +143,7 @@ router.get('/zone/:lat/:lng/:radius', async (req, res) => {
   }
 });
 
-// GET - Récupérer un signalement par ID (APRÈS les routes spécifiques)
+// GET - Récupérer un signalement par ID
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -188,7 +183,6 @@ router.post('/', async (req, res) => {
   try {
     const { type, latitude, longitude, status } = req.body;
     
-    // Validation des données obligatoires
     if (!type || latitude === undefined || longitude === undefined) {
       return res.status(400).json({
         success: false,
@@ -198,7 +192,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Validation des coordonnées
     if (typeof latitude !== 'number' || typeof longitude !== 'number') {
       return res.status(400).json({
         success: false,
@@ -208,7 +201,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Vérification des limites géographiques (région Bordeaux)
     if (latitude < 44.0 || latitude > 45.5 || longitude < -1.5 || longitude > 0.5) {
       return res.status(400).json({
         success: false,
@@ -218,7 +210,6 @@ router.post('/', async (req, res) => {
       });
     }
     
-    // Créer le signalement directement
     const nouveauSignalement = await prisma.report.create({
       data: {
         type: type,
@@ -235,7 +226,7 @@ router.post('/', async (req, res) => {
       data: nouveauSignalement
     });
     
-    console.log(`✅ Nouveau signalement créé: ${type} à [${latitude}, ${longitude}]`);
+    console.log(`Nouveau signalement créé: ${type} à [${latitude}, ${longitude}]`);
     
   } catch (error) {
     console.error('Erreur lors de la création du signalement:', error.message);
@@ -255,7 +246,6 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const { type, latitude, longitude, status } = req.body;
     
-    // Vérifier que le signalement existe
     const signalementExistant = await prisma.report.findUnique({
       where: { id }
     });
@@ -268,7 +258,6 @@ router.put('/:id', async (req, res) => {
       });
     }
     
-    // Préparer les données à mettre à jour
     const dataToUpdate = {};
     if (type) dataToUpdate.type = type;
     if (latitude !== undefined) dataToUpdate.latitude = latitude;
@@ -287,7 +276,7 @@ router.put('/:id', async (req, res) => {
       data: signalementMisAJour
     });
     
-    console.log(`✅ Signalement ${id} mis à jour`);
+    console.log(`Signalement ${id} mis à jour`);
     
   } catch (error) {
     console.error('Erreur lors de la mise à jour du signalement:', error.message);
@@ -306,7 +295,6 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // Vérifier que le signalement existe
     const signalementExistant = await prisma.report.findUnique({
       where: { id }
     });
@@ -329,7 +317,7 @@ router.delete('/:id', async (req, res) => {
       timestamp: new Date().toISOString()
     });
     
-    console.log(`✅ Signalement ${id} supprimé`);
+    console.log(`Signalement ${id} supprimé`);
     
   } catch (error) {
     console.error('Erreur lors de la suppression du signalement:', error.message);
@@ -343,7 +331,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Fermer la connexion Prisma à l'arrêt du serveur
 process.on('beforeExit', async () => {
   await prisma.$disconnect();
 });

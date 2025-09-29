@@ -7,7 +7,6 @@ const swaggerDocument = require('./config/swagger.json');
 
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
@@ -20,7 +19,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
   customSiteTitle: 'SmartCity API Documentation'
 }));
 
-// Route basique
+
 app.get('/', (req, res) => {
   res.send(`
     <h1>Smart City API</h1>
@@ -28,7 +27,6 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Import des routes
 const ci_vcub_p = require('./routes/ci_vcub_p');
 const fv_trvel_l = require('./routes/fv_trvel_l');
 const pc_captv_p = require('./routes/pc_captv_p');
@@ -39,7 +37,7 @@ const st_stationnement_velo_p = require('./routes/st_stationnement_velo_p');
 const signalements = require('./db_routes/signalements');
 const reportRoutes = require('./routes/report');
 
-// Configuration des routes
+
 app.use('/api/vcub', ci_vcub_p);
 app.use('/api/pistes', fv_trvel_l);
 app.use('/api/trafic', pc_captv_p);

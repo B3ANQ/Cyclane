@@ -7,26 +7,22 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const router = express.Router();
 
-// Configuration
 const API_KEY = process.env.BORDEAUX_API_KEY;
 const WFS_BASE_URL = 'https://data.bordeaux-metropole.fr/wfs';
 
 // GET - Récupérer les données des aménagements cyclables
 router.get('/', async (req, res) => {
   try {
-    // Construction de l'URL WFS
     const wfsUrl = `${WFS_BASE_URL}?key=${API_KEY}&REQUEST=GetFeature&SERVICE=WFS&VERSION=1.1.0&TYPENAME=bm:FV_TRVEL_L`;
-    
-    // Appel à l'API WFS
+
     const response = await axios.get(wfsUrl, {
       headers: {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000 // 15 secondes de timeout
+      timeout: 15000
     });
 
-    // Conversion XML vers JSON
     const parser = new xml2js.Parser({
       explicitArray: false,
       ignoreAttrs: false,
@@ -34,8 +30,7 @@ router.get('/', async (req, res) => {
     });
 
     const result = await parser.parseStringPromise(response.data);
-    
-    // Extraction et formatage des données
+
     let amenagements = [];
     
     if (result && result['wfs:FeatureCollection'] && result['wfs:FeatureCollection']['gml:featureMember']) {
@@ -46,13 +41,11 @@ router.get('/', async (req, res) => {
       amenagements = features.map(feature => {
         const amenagement = feature['bm:FV_TRVEL_L'] || {};
         
-        // Extraction de la géométrie LineString
         let geometrie = null;
         if (amenagement['bm:geometry'] && amenagement['bm:geometry']['gml:LineString']) {
           const lineString = amenagement['bm:geometry']['gml:LineString'];
           let posList = lineString['gml:posList'];
           
-          // Vérifier si posList est un objet avec une propriété _ (texte)
           if (typeof posList === 'object' && posList._) {
             posList = posList._;
           }
@@ -98,13 +91,11 @@ router.get('/', async (req, res) => {
       data: amenagements
     });
 
-    // Log du nombre d'aménagements récupérés
     console.log(`${amenagements.length} aménagements cyclables récupérés avec succès`);
 
   } catch (error) {
     console.error('Erreur lors de la récupération des aménagements cyclables:', error.message);
-    
-    // Log plus détaillé pour le debug
+
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Status Text:', error.response.statusText);

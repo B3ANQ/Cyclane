@@ -13,26 +13,23 @@ const WFS_BASE_URL = 'https://data.bordeaux-metropole.fr/wfs';
 // GET - Récupérer les données des stations VCub
 router.get('/', async (req, res) => {
   try {
-    // Construction de l'URL WFS
+
     const wfsUrl = `${WFS_BASE_URL}?key=${API_KEY}&REQUEST=GetFeature&SERVICE=WFS&VERSION=1.1.0&TYPENAME=bm:CI_VCUB_P`;
     
-    console.log('URL appelée:', wfsUrl); // Pour debug
+    console.log('URL appelée:', wfsUrl);
     
-    // Appel à l'API WFS
     const response = await axios.get(wfsUrl, {
       headers: {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000, // 15 secondes de timeout
-      responseType: 'arraybuffer' // Pour contrôler l'encodage
+      timeout: 15000,
+      responseType: 'arraybuffer'
     });
 
-    // Conversion explicite en UTF-8
     const xmlData = Buffer.from(response.data).toString('utf8');
-    console.log('Réponse reçue, taille:', xmlData.length); // Pour debug
+    console.log('Réponse reçue, taille:', xmlData.length);
 
-    // Conversion XML vers JSON
     const parser = new xml2js.Parser({
       explicitArray: false,
       ignoreAttrs: false,
@@ -41,13 +38,11 @@ router.get('/', async (req, res) => {
 
     const result = await parser.parseStringPromise(xmlData);
     
-    // Debug: afficher la structure
     console.log('Structure parsée:', Object.keys(result));
     if (result['wfs:FeatureCollection']) {
       console.log('FeatureCollection keys:', Object.keys(result['wfs:FeatureCollection']));
     }
     
-    // Extraction et formatage des données
     let stations = [];
     
     if (result && result['wfs:FeatureCollection'] && result['wfs:FeatureCollection']['gml:featureMember']) {
@@ -55,14 +50,11 @@ router.get('/', async (req, res) => {
         ? result['wfs:FeatureCollection']['gml:featureMember']
         : [result['wfs:FeatureCollection']['gml:featureMember']];
 
-      console.log('Nombre de features:', features.length); // Pour debug
+      console.log('Nombre de features:', features.length);
 
       stations = features.map(feature => {
         const station = feature['bm:CI_VCUB_P'] || {};
-        
-        //console.log('Station keys:', Object.keys(station)); // Pour debug
-        
-        // Extraction des coordonnées depuis la géométrie
+   
         let coordonnees = { longitude: null, latitude: null };
         if (station['bm:geometry'] && station['bm:geometry']['gml:Point']) {
           const pos = station['bm:geometry']['gml:Point']['gml:pos'];
@@ -104,13 +96,11 @@ router.get('/', async (req, res) => {
       data: stations
     });
 
-    // Log du nombre de stations récupérées
     console.log(`${stations.length} stations VCub récupérées avec succès`);
 
   } catch (error) {
     console.error('Erreur lors de la récupération des données VCub:', error.message);
-    
-    // Log plus détaillé pour le debug
+
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Status Text:', error.response.statusText);

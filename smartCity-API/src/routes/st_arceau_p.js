@@ -6,26 +6,22 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const router = express.Router();
 
-// Configuration
 const API_KEY = process.env.BORDEAUX_API_KEY;
 const WFS_BASE_URL = 'https://data.bordeaux-metropole.fr/wfs';
 
 // GET - Récupérer les données des arceaux vélo
 router.get('/', async (req, res) => {
   try {
-    // Construction de l'URL WFS
     const wfsUrl = `${WFS_BASE_URL}?key=${API_KEY}&REQUEST=GetFeature&SERVICE=WFS&VERSION=1.1.0&TYPENAME=bm:ST_ARCEAU_P`;
-    
-    // Appel à l'API WFS
+
     const response = await axios.get(wfsUrl, {
       headers: {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000 // 15 secondes de timeout
+      timeout: 15000
     });
 
-    // Conversion XML vers JSON
     const parser = new xml2js.Parser({
       explicitArray: false,
       ignoreAttrs: false,
@@ -34,7 +30,6 @@ router.get('/', async (req, res) => {
 
     const result = await parser.parseStringPromise(response.data);
     
-    // Extraction et formatage des données
     let arceaux = [];
     
     if (result && result['wfs:FeatureCollection'] && result['wfs:FeatureCollection']['gml:featureMember']) {
@@ -44,13 +39,11 @@ router.get('/', async (req, res) => {
 
       arceaux = features.map(feature => {
         const arceau = feature['bm:ST_ARCEAU_P'] || {};
-        
-        // Extraction des coordonnées depuis la géométrie Point
+
         let coordonnees = { longitude: null, latitude: null };
         if (arceau['bm:geometry'] && arceau['bm:geometry']['gml:Point']) {
           let pos = arceau['bm:geometry']['gml:Point']['gml:pos'];
-          
-          // Vérifier si pos est un objet avec une propriété _ (texte)
+
           if (typeof pos === 'object' && pos._) {
             pos = pos._;
           }
@@ -87,13 +80,11 @@ router.get('/', async (req, res) => {
       data: arceaux
     });
 
-    // Log du nombre d'arceaux récupérés
-    console.log(`✅ ${arceaux.length} arceaux vélo récupérés avec succès`);
+    console.log(`${arceaux.length} arceaux vélo récupérés avec succès`);
 
   } catch (error) {
     console.error('Erreur lors de la récupération des arceaux vélo:', error.message);
-    
-    // Log plus détaillé pour le debug
+
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Status Text:', error.response.statusText);

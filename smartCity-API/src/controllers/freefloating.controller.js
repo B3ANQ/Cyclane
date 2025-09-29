@@ -8,7 +8,6 @@ const getAllFreefloatingZones = async (req, res) => {
     let allZones = [];
     let totalCount = null;
 
-    // Boucle pour récupérer toutes les pages
     while (true) {
       const url = `${baseUrl}?limit=${pageSize}&offset=${offset}`;
       const response = await axios.get(url, {
@@ -27,7 +26,6 @@ const getAllFreefloatingZones = async (req, res) => {
       
       allZones = [...allZones, ...data.results];
       
-      // Arrêt si on a tout récupéré
       if (allZones.length >= totalCount) break;
       
       offset += pageSize;
@@ -45,7 +43,6 @@ const getAllFreefloatingZones = async (req, res) => {
   } catch (error) {
     console.error('Erreur récupération freefloating:', error.message);
     
-    // Log plus détaillé pour le debug
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Status Text:', error.response.statusText);

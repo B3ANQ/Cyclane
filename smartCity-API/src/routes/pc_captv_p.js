@@ -6,26 +6,22 @@ const axios = require('axios');
 const xml2js = require('xml2js');
 const router = express.Router();
 
-// Configuration
 const API_KEY = process.env.BORDEAUX_API_KEY;
 const WFS_BASE_URL = 'https://data.bordeaux-metropole.fr/wfs';
 
 // GET - Récupérer les données des capteurs de trafic vélo
 router.get('/', async (req, res) => {
   try {
-    // Construction de l'URL WFS
     const wfsUrl = `${WFS_BASE_URL}?key=${API_KEY}&REQUEST=GetFeature&SERVICE=WFS&VERSION=1.1.0&TYPENAME=bm:PC_CAPTV_P`;
-    
-    // Appel à l'API WFS
+
     const response = await axios.get(wfsUrl, {
       headers: {
         'Accept': 'application/xml',
         'User-Agent': 'SmartCity-API/1.0'
       },
-      timeout: 15000 // 15 secondes de timeout
+      timeout: 15000
     });
 
-    // Conversion XML vers JSON
     const parser = new xml2js.Parser({
       explicitArray: false,
       ignoreAttrs: false,
@@ -34,7 +30,6 @@ router.get('/', async (req, res) => {
 
     const result = await parser.parseStringPromise(response.data);
     
-    // Extraction et formatage des données
     let capteurs = [];
     
     if (result && result['wfs:FeatureCollection'] && result['wfs:FeatureCollection']['gml:featureMember']) {
@@ -44,13 +39,11 @@ router.get('/', async (req, res) => {
 
       capteurs = features.map(feature => {
         const capteur = feature['bm:PC_CAPTV_P'] || {};
-        
-        // Extraction des coordonnées depuis la géométrie Point
+
         let coordonnees = { longitude: null, latitude: null };
         if (capteur['bm:geometry'] && capteur['bm:geometry']['gml:Point']) {
           let pos = capteur['bm:geometry']['gml:Point']['gml:pos'];
-          
-          // Vérifier si pos est un objet avec une propriété _ (texte)
+
           if (typeof pos === 'object' && pos._) {
             pos = pos._;
           }
@@ -89,13 +82,11 @@ router.get('/', async (req, res) => {
       data: capteurs
     });
 
-    // Log du nombre de capteurs récupérés
     console.log(`${capteurs.length} capteurs de trafic vélo récupérés avec succès`);
 
   } catch (error) {
     console.error('Erreur lors de la récupération des capteurs de trafic vélo:', error.message);
-    
-    // Log plus détaillé pour le debug
+
     if (error.response) {
       console.error('Status:', error.response.status);
       console.error('Status Text:', error.response.statusText);
