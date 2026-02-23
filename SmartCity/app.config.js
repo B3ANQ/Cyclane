@@ -6,7 +6,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: true,
+    newArchEnabled: false,
     scheme: "smartcity",
     statusBar: {
       style: "auto",
@@ -41,6 +41,17 @@ export default {
     },
     plugins: [
       "expo-router"
-    ]
+    ],
+    extra: {
+      eas: {
+        projectId: "db0c8871-fdca-4531-a338-0b3b13072f42"
+      }
+    },
+    updates: {
+      url: "https://u.expo.dev/db0c8871-fdca-4531-a338-0b3b13072f42"
+    },
+    runtimeVersion: {
+      policy: "appVersion"
+    }
   }
 };
