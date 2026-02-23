@@ -48,4 +48,9 @@ app.use('/api/services', st_service_velo_p);
 app.use('/api/stationnement', st_stationnement_velo_p);
 app.use('/api/signalements', signalements);
 
+// Route de ping
+app.get('/ping', (req, res) => {
+  res.send('pong');
+});
+
 module.exports = app;
