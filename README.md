@@ -122,6 +122,4 @@ Ce projet est développé dans le cadre académique d'Epitech Digital School.
 
 <div align="center">
   <strong>SmartCity - Pour une mobilité plus verte à Bordeaux</strong>
-  
-  [Documentation](docs/) • [Issues](issues/) • [Releases](releases/)
 </div>
