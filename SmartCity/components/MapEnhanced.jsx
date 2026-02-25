@@ -326,7 +326,7 @@ function MapEnhanced() {
     try {
       const response = await fetch(
         `https://api.openrouteservice.org/v2/directions/cycling-regular?` +
-        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m`
+        `api_key=${ORS_API_KEY}&start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&instructions=true&units=m&language=fr`
       );
 
       if (!response.ok) {
